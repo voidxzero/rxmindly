@@ -12,8 +12,8 @@ RUN npm run build
 FROM node:24-alpine
 ENV NODE_ENV=production \
     PORT=8080 \
-    MEDIMINDER_DB=/data/mediminder.db \
-    MEDIMINDER_WEB=/app/web
+    RXMINDLY_DB=/data/rxmindly.db \
+    RXMINDLY_WEB=/app/web
 WORKDIR /app
 COPY server/package.json ./
 COPY server/src ./src

@@ -108,7 +108,7 @@ export function createApp({ dbPath, staticDir, allowSignup = false, trustProxy =
   const routes = {
     'GET /api/status': () => {
       const users = userCount();
-      return { app: 'mediminder', version: VERSION, setupRequired: users === 0, signupAllowed: users === 0 || allowSignup };
+      return { app: 'rxmindly', version: VERSION, setupRequired: users === 0, signupAllowed: users === 0 || allowSignup };
     },
 
     // Creates the first account. Closed afterwards unless signup is enabled.

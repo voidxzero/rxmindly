@@ -17,7 +17,7 @@ const MAX_NOTIFICATIONS = 200;
 const SNOOZE_MINUTES = 10;
 const LOW_STOCK_ID = 1;
 const TEST_ID = 2;
-const SNOOZE_KEY = 'mediminder.snoozes';
+const SNOOZE_KEY = 'rxmindly.snoozes';
 
 type Kind = 0 | 1 | 2; // first reminder, follow-up, snooze
 

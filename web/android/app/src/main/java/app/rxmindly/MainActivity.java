@@ -1,4 +1,4 @@
-package app.mediminder;
+package app.rxmindly;
 
 import com.getcapacitor.BridgeActivity;
 

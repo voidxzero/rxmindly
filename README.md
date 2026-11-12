@@ -20,14 +20,14 @@ docker compose up -d --build
 
 Open `http://<your-server>:8060`. The first visit asks you to create the account; after that, sign-up is closed.
 
-The database is a single SQLite file, `data/mediminder.db`, next to `docker-compose.yml`. **Back that folder up.** You can also download a JSON backup from Settings in the web app.
+The database is a single SQLite file, `data/rxmindly.db`, next to `docker-compose.yml`. **Back that folder up.** You can also download a JSON backup from Settings in the web app.
 
 Settings, in `docker-compose.yml`:
 
 | Variable | Meaning |
 |---|---|
-| `MEDIMINDER_TRUST_PROXY` | `true` when behind a reverse proxy, so login rate-limiting sees real client addresses |
-| `MEDIMINDER_ALLOW_SIGNUP` | `true` to let more people create accounts (each sees only their own data) |
+| `RXMINDLY_TRUST_PROXY` | `true` when behind a reverse proxy, so login rate-limiting sees real client addresses |
+| `RXMINDLY_ALLOW_SIGNUP` | `true` to let more people create accounts (each sees only their own data) |
 
 If the server is reachable from outside your home network, put it behind HTTPS (a reverse proxy such as Caddy does this in two lines). Over plain `http://` your password and data travel unencrypted.
 

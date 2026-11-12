@@ -28,7 +28,7 @@ cd web && npm test           # logic tests (vitest)
 cd web && npm run build      # type-check + bundle; run this before calling UI work done
 cd web && npm run dev        # live reload, proxies /api to :8080
 ./build-apk.sh               # Android APK; finds the SDK and JDK under ~/Android
-podman build -t mediminder . # docker is not installed on the dev machine; podman is
+podman build -t rxmindly . # docker is not installed on the dev machine; podman is
 ```
 
 ## Rules that are easy to break
@@ -49,7 +49,7 @@ podman build -t mediminder . # docker is not installed on the dev machine; podma
 
 - Runs with `docker compose up -d --build` from the project folder on the server, kept under `/home/richard/docker/`.
 - Published on host port **8060** (container port stays 8080).
-- Data is a bind mount, `./data:/data`: the database is `data/mediminder.db` beside the compose file. The folder must be owned by uid 1000, the container's user.
+- Data is a bind mount, `./data:/data`: the database is `data/rxmindly.db` beside the compose file. The folder must be owned by uid 1000, the container's user.
 - The project is copied to the server by hand over SFTP. Only `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `server/` and `web/` (without `node_modules`, `dist`, `android`) are needed there. Never copy over or delete the server's `data/` folder.
 - In the Android app the server address is entered at sign-in, e.g. `<server-ip>:8060`.
 
@@ -66,5 +66,5 @@ podman build -t mediminder . # docker is not installed on the dev machine; podma
 - Animations (`lib/celebrate.ts`, the `.fresh` classes) must stay off under `prefers-reduced-motion`.
 - Journal questions all run 1 (low) to 5 (high), and the built-in ones are worded so 5 is the good end, which keeps every chart reading the same way.
 - Chart status colors (taken / some taken / missed / skipped) always carry an icon or number as well as color.
-- **The app was called Mediminder until 2026-11-12.** Only the name people see changed. Everything a running install depends on still says `mediminder` and must stay that way: the database file `mediminder.db`, the `MEDIMINDER_*` environment variables, the compose service and container name, the Android package id `app.mediminder`, the browser storage keys, and the `app: 'mediminder'` field the sign-in screen checks in `/api/status`. Renaming any of them strands existing data or forces a reinstall.
+- **The app was called Mediminder until 2026-11-12** and was renamed throughout, identifiers included. Two shims remain on purpose and are the only places the old name should appear in code: `server/src/index.js` renames a leftover `mediminder.db` to `rxmindly.db` on start, and `web/src/lib/store.ts` reads the old `mediminder` browser storage key when the new one is empty. The local project folder is still `/home/richard/Projects/mediminder`.
 - The git history starts on 2026-11-12 with one commit of the already-working app; there is nothing older to look up.

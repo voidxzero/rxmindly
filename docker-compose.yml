@@ -1,8 +1,8 @@
 services:
-  mediminder:
+  rxmindly:
     build: .
-    image: mediminder
-    container_name: mediminder
+    image: rxmindly
+    container_name: rxmindly
     restart: unless-stopped
     ports:
       - "8060:8080"
@@ -14,6 +14,6 @@ services:
     environment:
       # Set to "true" when running behind a reverse proxy (Caddy, nginx, Traefik…)
       # so login rate-limiting sees the real client address.
-      MEDIMINDER_TRUST_PROXY: "false"
+      RXMINDLY_TRUST_PROXY: "false"
       # Set to "true" to let more people create their own accounts.
-      MEDIMINDER_ALLOW_SIGNUP: "false"
+      RXMINDLY_ALLOW_SIGNUP: "false"

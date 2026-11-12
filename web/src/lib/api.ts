@@ -86,7 +86,7 @@ export async function findServer(input: string): Promise<{ url: string; status: 
   for (const url of candidates) {
     try {
       const status = await api.status(url);
-      if (status.app !== 'mediminder') throw new ApiError("That address doesn't look like a Rxmindly server", 0);
+      if (status.app !== 'rxmindly') throw new ApiError("That address doesn't look like a Rxmindly server", 0);
       return { url, status };
     } catch (err) {
       lastError = err;

@@ -27,7 +27,7 @@ export interface Snapshot {
   loaded: boolean;
 }
 
-const STORAGE_KEY = 'mediminder';
+const STORAGE_KEY = 'rxmindly';
 const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30 };
 
 function load(): Snapshot {
@@ -44,7 +44,8 @@ function load(): Snapshot {
     loaded: false,
   };
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
+    // 'mediminder' is the key from before the app was renamed: carry a signed-in browser across.
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem('mediminder') ?? 'null');
     if (saved && typeof saved === 'object') {
       return {
         ...base,

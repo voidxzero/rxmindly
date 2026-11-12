@@ -10,7 +10,7 @@ let base;
 let dir;
 
 before(async () => {
-  dir = mkdtempSync(join(tmpdir(), 'mediminder-test-'));
+  dir = mkdtempSync(join(tmpdir(), 'rxmindly-test-'));
   writeFileSync(join(dir, 'index.html'), '<!doctype html><title>shell</title>');
   server = createApp({ dbPath: join(dir, 'test.db'), staticDir: dir });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
