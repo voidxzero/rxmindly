@@ -1,0 +1,9 @@
+{
+  "name": "Rxmindly",
+  "short_name": "Rxmindly",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#0e6f6a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

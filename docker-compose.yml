@@ -1,0 +1,19 @@
+services:
+  mediminder:
+    build: .
+    image: mediminder
+    container_name: mediminder
+    restart: unless-stopped
+    ports:
+      - "8060:8080"
+    volumes:
+      # The whole database lives in ./data, next to this file. Back it up.
+      # Create it before the first start, owned by user 1000 (the container's user):
+      #   mkdir -p data && sudo chown 1000:1000 data
+      - ./data:/data
+    environment:
+      # Set to "true" when running behind a reverse proxy (Caddy, nginx, Traefik…)
+      # so login rate-limiting sees the real client address.
+      MEDIMINDER_TRUST_PROXY: "false"
+      # Set to "true" to let more people create their own accounts.
+      MEDIMINDER_ALLOW_SIGNUP: "false"
