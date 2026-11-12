@@ -44,8 +44,7 @@ function load(): Snapshot {
     loaded: false,
   };
   try {
-    // 'mediminder' is the key from before the app was renamed: carry a signed-in browser across.
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem('mediminder') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null');
     if (saved && typeof saved === 'object') {
       return {
         ...base,

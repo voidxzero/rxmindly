@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, renameSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp } from './app.js';
@@ -9,16 +9,6 @@ const dbPath = resolve(process.env.RXMINDLY_DB ?? resolve(here, '../data/rxmindl
 const staticDir = resolve(process.env.RXMINDLY_WEB ?? resolve(here, '../../web/dist'));
 
 mkdirSync(dirname(dbPath), { recursive: true });
-
-// The app used to be called Mediminder. A database left over from then is
-// carried across by renaming it, so an upgrade never starts out empty.
-const oldDbPath = resolve(dirname(dbPath), 'mediminder.db');
-if (!existsSync(dbPath) && existsSync(oldDbPath)) {
-  for (const suffix of ['', '-wal', '-shm']) {
-    if (existsSync(oldDbPath + suffix)) renameSync(oldDbPath + suffix, dbPath + suffix);
-  }
-  console.log(`Renamed ${oldDbPath} to ${dbPath}`);
-}
 
 const server = createApp({
   dbPath,

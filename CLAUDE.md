@@ -66,5 +66,5 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - Animations (`lib/celebrate.ts`, the `.fresh` classes) must stay off under `prefers-reduced-motion`.
 - Journal questions all run 1 (low) to 5 (high), and the built-in ones are worded so 5 is the good end, which keeps every chart reading the same way.
 - Chart status colors (taken / some taken / missed / skipped) always carry an icon or number as well as color.
-- **The app was called Mediminder until 2026-11-12** and was renamed throughout, identifiers included. Two shims remain on purpose and are the only places the old name should appear in code: `server/src/index.js` renames a leftover `mediminder.db` to `rxmindly.db` on start, and `web/src/lib/store.ts` reads the old `mediminder` browser storage key when the new one is empty. The local project folder is still `/home/richard/Projects/mediminder`.
+- The app was called Mediminder until 2026-11-12 and was renamed throughout with no carry-over for old installs (there was no data to keep). The old name should not appear anywhere in the code. The local project folder is still `/home/richard/Projects/mediminder`.
 - The git history starts on 2026-11-12 with one commit of the already-working app; there is nothing older to look up.
