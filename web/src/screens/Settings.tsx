@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Download, KeyRound, LogOut, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { Bell, Check, Download, KeyRound, LogOut, Plus, RefreshCw, Trash2, Upload, Wifi, X } from 'lucide-react';
 import { Field, Sheet } from '../components/ui';
 import { ApiError, api } from '../lib/api';
 import { formatClock, today } from '../lib/dates';
@@ -7,10 +7,10 @@ import { DEFAULT_QUESTIONS, customQuestions, defaultIsOn } from '../lib/journal'
 import { dosesCsv, importKindLabel, journalCsv, medicinesCsv, planImport, refillsCsv, type ImportPlan } from '../lib/transfer';
 import { saveFile } from '../lib/save-file';
 import { EMPTY_STATE, type AppState } from '../lib/types';
-import { UPDATE_REPO, checkForUpdate, installUpdate, updateAvailable, useUpdates } from '../lib/updates';
+import { checkForUpdate, installUpdate, updateAvailable, useUpdates } from '../lib/updates';
 import { uid } from '../lib/logic';
 import { isNative, reminderPermission, requestReminderPermission, sendTestReminder, type ReminderPermission } from '../lib/reminders';
-import { activeUrl, dispatch, setBackupUrl, signOut, sync, updateSettings, useStore, withServer } from '../lib/store';
+import { activeUrl, checkAddress, dispatch, setBackupUrl, signOut, sync, updateSettings, useStore, withServer, type AddressCheck } from '../lib/store';
 
 export function syncSummary(snap: ReturnType<typeof useStore>): { text: string; tone: 'ok' | 'warn' } {
   const waiting = snap.outbox.length;
@@ -73,6 +73,8 @@ export function Settings() {
         </div>
       </header>
 
+      {isNative && <AppUpdates />}
+
       <section className="card">
         <h2 className="card-title">Your server</h2>
         {isNative && <ServerAddresses />}
@@ -92,7 +94,7 @@ export function Settings() {
               <input type="checkbox" checked={snap.settings.reminders} onChange={(e) => updateSettings({ reminders: e.target.checked })} />
               <span>Remind me when it’s time to take my medicine</span>
             </label>
-            {snap.settings.reminders && permission !== 'granted' && (
+            {(snap.settings.reminders || snap.settings.journalReminder) && permission !== 'granted' && (
               <div className="note warn">
                 <p>Notifications are turned off for Rxmindly, so reminders can’t appear.</p>
                 <button className="btn small" onClick={() => void requestReminderPermission().then(setPermission)}>
@@ -125,13 +127,40 @@ export function Settings() {
                 )}
               </>
             )}
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={snap.settings.journalReminder}
+                onChange={(e) => {
+                  updateSettings({ journalReminder: e.target.checked });
+                  if (e.target.checked && permission !== 'granted') void requestReminderPermission().then(setPermission);
+                }}
+              />
+              <span>Send me a gentle nudge to write in my journal</span>
+            </label>
+            {snap.settings.journalReminder && (
+              <Field label="Every day at" hint="A little reminder to check in with yourself. If you’ve already written that day, it stays quiet.">
+                <input
+                  className="input"
+                  type="time"
+                  value={snap.settings.journalReminderTime}
+                  onChange={(e) => e.target.value && updateSettings({ journalReminderTime: e.target.value })}
+                />
+              </Field>
+            )}
           </>
         )}
       </section>
 
-      <JournalQuestions />
+      <section className="card">
+        <h2 className="card-title">Sounds</h2>
+        <label className="check">
+          <input type="checkbox" checked={snap.settings.sounds} onChange={(e) => updateSettings({ sounds: e.target.checked })} />
+          <span>Play little sounds when I take, skip or refill a medicine</span>
+        </label>
+      </section>
 
-      {isNative && <AppUpdates />}
+      <JournalQuestions />
 
       <section className="card">
         <h2 className="card-title">Your data</h2>
@@ -257,6 +286,17 @@ function ServerAddresses() {
   const [backup, setBackup] = useState(snap.backupUrl);
   const inUse = activeUrl(snap);
   const changed = backup.trim().replace(/\/+$/, '') !== snap.backupUrl;
+  const [testing, setTesting] = useState(false);
+  const [results, setResults] = useState<{ label: string; address: string; result: AddressCheck }[] | null>(null);
+  // Tests what's typed in the local box, so an address can be tried before saving it.
+  const test = async () => {
+    const targets = [{ label: 'Main', address: snap.serverUrl }];
+    if (backup.trim()) targets.push({ label: 'Local', address: backup.trim() });
+    setTesting(true);
+    setResults(null);
+    setResults(await Promise.all(targets.map(async (t) => ({ ...t, result: await checkAddress(t.address) }))));
+    setTesting(false);
+  };
   return (
     <>
       <dl className="facts">
@@ -285,13 +325,29 @@ function ServerAddresses() {
           </button>
         </div>
       </Field>
+      <button className="btn" onClick={() => void test()} disabled={testing}>
+        <Wifi size={18} /> {testing ? 'Testing…' : 'Test connection'}
+      </button>
+      {results && (
+        <ul className="plain-list connection-results" aria-live="polite">
+          {results.map(({ label, address, result }) => (
+            <li className="row" key={label}>
+              <span>
+                {label} <span className="muted">· {address}</span>
+              </span>
+              <span className={`status-text ${result.ok ? 'taken' : 'missed'}`}>
+                {result.ok ? <Check size={16} /> : <X size={16} />} {result.ok ? `Connected · ${result.ms} ms` : result.reason}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </>
   );
 }
 
 /** Android only: the installed version, whether GitHub has a newer one, and the button that installs it. */
 function AppUpdates() {
-  const snap = useStore();
   const updates = useUpdates();
   const available = updateAvailable(updates);
   const busy = updates.status !== 'idle';
@@ -313,9 +369,6 @@ function AppUpdates() {
       <button className="btn block" onClick={() => void checkForUpdate(true)} disabled={busy}>
         <RefreshCw size={18} /> {updates.status === 'checking' ? 'Checking…' : 'Check for updates'}
       </button>
-      <Field label="GitHub access token" hint={`Only needed if the ${UPDATE_REPO} repository is private. It stays on this phone.`}>
-        <input className="input" type="password" autoComplete="off" value={snap.settings.githubToken} onChange={(e) => updateSettings({ githubToken: e.target.value })} placeholder="Leave empty for a public repository" />
-      </Field>
     </section>
   );
 }

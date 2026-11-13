@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Minus, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Minus, X } from 'lucide-react';
 import { PillMark, Sheet, useNow } from '../components/ui';
-import { DAY_LETTERS, addDays, dayOfWeek, formatClock, formatDate, formatTime, friendlyDate, partOfDay, today } from '../lib/dates';
+import { DAY_LETTERS, DAY_NAMES, addDays, addMonths, dateRange, dayOfWeek, formatClock, formatDate, formatTime, friendlyDate, partOfDay, today } from '../lib/dates';
 import { buildHistory, phaseOf, unitLabel, type Cell, type CellStatus, type History as HistoryData, type MedHistory } from '../lib/logic';
 import { useStore } from '../lib/store';
+import type { AppState } from '../lib/types';
 
 const RANGES = [7, 30, 90] as const;
+
+type View = 'chart' | 'calendar';
+const VIEW_KEY = 'rxmindly.historyView';
+const loadView = (): View => {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'calendar' ? 'calendar' : 'chart';
+  } catch {
+    return 'chart';
+  }
+};
 
 const STATUS_LABEL: Record<CellStatus, string> = {
   taken: 'All taken',
@@ -44,16 +55,17 @@ function totalCells(history: HistoryData): Cell[] {
   return history.dates.map((date, i) => {
     const cells = history.rows.map((r) => r.cells[i]);
     const items = cells.flatMap((c) => c.items);
+    const extra = cells.flatMap((c) => c.extra);
     const expected = cells.reduce((n, c) => n + c.expected, 0);
     const taken = cells.reduce((n, c) => n + c.taken, 0);
     const skipped = cells.reduce((n, c) => n + c.skipped, 0);
     let status: CellStatus = 'none';
-    if (!items.length) status = 'none';
+    if (!items.length) status = extra.length ? 'asNeeded' : 'none';
     else if (!expected) status = 'pending';
     else if (taken === expected) status = expected < items.length ? 'pending' : 'taken';
     else if (taken > 0) status = 'partial';
     else status = skipped === expected ? 'skipped' : 'missed';
-    return { date, status, expected, taken, skipped, items, extra: [] };
+    return { date, status, expected, taken, skipped, items, extra };
   });
 }
 
@@ -61,6 +73,15 @@ export function History() {
   const { state } = useStore();
   useNow();
   const [range, setRange] = useState<(typeof RANGES)[number]>(30);
+  const [view, setViewState] = useState<View>(loadView);
+  const setView = (v: View) => {
+    setViewState(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // Remembering the choice is only a convenience.
+    }
+  };
   const [picked, setPicked] = useState<{ title: string; cell: Cell } | null>(null);
   const t = today();
   const history = useMemo(() => buildHistory(state, addDays(t, -(range - 1)), t), [state, range, t]);
@@ -98,20 +119,35 @@ export function History() {
       <header className="screen-head">
         <div>
           <h1>History</h1>
-          <p className="muted">
-            {formatDate(history.dates[0], { month: 'short', day: 'numeric' })} – {formatDate(t, { month: 'short', day: 'numeric' })}
-          </p>
+          {view === 'chart' && (
+            <p className="muted">
+              {formatDate(history.dates[0], { month: 'short', day: 'numeric' })} – {formatDate(t, { month: 'short', day: 'numeric' })}
+            </p>
+          )}
         </div>
-        <div className="segmented compact" role="radiogroup" aria-label="Time range">
-          {RANGES.map((r) => (
-            <button key={r} role="radio" aria-checked={range === r} className={range === r ? 'on' : ''} onClick={() => setRange(r)}>
-              {r} days
-            </button>
-          ))}
+        <div className="head-controls">
+          <div className="segmented compact" role="radiogroup" aria-label="View">
+            {(['chart', 'calendar'] as const).map((v) => (
+              <button key={v} role="radio" aria-checked={view === v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
+                {v === 'chart' ? 'Chart' : 'Calendar'}
+              </button>
+            ))}
+          </div>
+          {view === 'chart' && (
+            <div className="segmented compact" role="radiogroup" aria-label="Time range">
+              {RANGES.map((r) => (
+                <button key={r} role="radio" aria-checked={range === r} className={range === r ? 'on' : ''} onClick={() => setRange(r)}>
+                  {r} days
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
-      {!hasData ? (
+      {view === 'calendar' ? (
+        <CalendarView state={state} today={t} onPick={(title, cell) => setPicked({ title, cell })} />
+      ) : !hasData ? (
         <div className="empty">
           <h3>No history yet</h3>
           <p className="muted">Once you start taking doses from the pill organizer, each day’s record shows up here.</p>
@@ -181,16 +217,7 @@ export function History() {
                 </tbody>
               </table>
             </div>
-            <ul className="legend" aria-label="Legend">
-              {(['taken', 'partial', 'missed', 'skipped', 'pending'] as const).map((status) => (
-                <li key={status}>
-                  <span className={`cell ${status}`} aria-hidden="true">
-                    <Glyph cell={{ date: '', status, expected: 3, taken: 1, skipped: 0, items: [], extra: [] }} />
-                  </span>
-                  {STATUS_LABEL[status]}
-                </li>
-              ))}
-            </ul>
+            <Legend />
           </section>
 
           {scheduledRows.length > 0 && (
@@ -241,6 +268,110 @@ export function History() {
 
       {picked && <DaySheet title={picked.title} cell={picked.cell} today={t} onClose={() => setPicked(null)} />}
     </div>
+  );
+}
+
+function Legend() {
+  return (
+    <ul className="legend" aria-label="Legend">
+      {(['taken', 'partial', 'missed', 'skipped', 'pending'] as const).map((status) => (
+        <li key={status}>
+          <span className={`cell ${status}`} aria-hidden="true">
+            <Glyph cell={{ date: '', status, expected: 3, taken: 1, skipped: 0, items: [], extra: [] }} />
+          </span>
+          {STATUS_LABEL[status]}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A standard month calendar: each day shows how that day's doses went. */
+function CalendarView({ state, today: t, onPick }: { state: AppState; today: string; onPick: (title: string, cell: Cell) => void }) {
+  const thisMonth = t.slice(0, 7);
+  const [month, setMonth] = useState(thisMonth);
+  const [medId, setMedId] = useState('');
+  const first = `${month}-01`;
+  const last = addDays(`${addMonths(month, 1)}-01`, -1);
+  const end = last < t ? last : t;
+  const history = useMemo(() => buildHistory(state, first, end, t), [state, first, end, t]);
+  const totals = useMemo(() => totalCells(history), [history]);
+  const row = history.rows.find((r) => r.med.id === medId);
+  const cells = new Map((row ? row.cells : totals).map((c) => [c.date, c]));
+  const title = row ? row.med.name : 'All doses';
+  const stats = row ?? history;
+  const leading = dayOfWeek(first);
+
+  return (
+    <section className="card">
+      <div className="cal-head">
+        <h2 className="card-title">{formatDate(first, { month: 'long', year: 'numeric' })}</h2>
+        <div className="week-nav">
+          {month !== thisMonth && (
+            <button className="btn small" onClick={() => setMonth(thisMonth)}>
+              Today
+            </button>
+          )}
+          <button className="icon-btn" onClick={() => setMonth(addMonths(month, -1))} aria-label="Previous month">
+            <ChevronLeft size={22} />
+          </button>
+          <button className="icon-btn" onClick={() => setMonth(addMonths(month, 1))} disabled={month >= thisMonth} aria-label="Next month">
+            <ChevronRight size={22} />
+          </button>
+        </div>
+      </div>
+      {history.rows.length > 1 && (
+        <select className="input cal-filter" value={row ? medId : ''} onChange={(e) => setMedId(e.target.value)} aria-label="Medicine">
+          <option value="">All medicines</option>
+          {history.rows.map((r) => (
+            <option key={r.med.id} value={r.med.id}>
+              {r.med.name}
+            </option>
+          ))}
+        </select>
+      )}
+      <p className="muted card-sub">
+        {stats.expected
+          ? `${stats.taken} of ${stats.expected} scheduled doses taken${stats.missed ? ` · ${stats.missed} missed` : ''}. Tap a day to see its doses.`
+          : history.rows.length
+            ? 'Nothing was scheduled this month. Tap a day to see its doses.'
+            : 'Nothing recorded this month.'}
+      </p>
+      <div className="calendar" role="grid" aria-label={formatDate(first, { month: 'long', year: 'numeric' })}>
+        {DAY_NAMES.map((d) => (
+          <span key={d} className="cal-dow" role="columnheader">
+            {d}
+          </span>
+        ))}
+        {Array.from({ length: leading }, (_, i) => (
+          <span key={`blank-${i}`} className="cal-day blank" />
+        ))}
+        {dateRange(first, last).map((date) => {
+          const day = Number(date.slice(8));
+          const cell = cells.get(date);
+          const cls = `cal-day${date === t ? ' is-today' : ''}`;
+          if (!cell || cell.status === 'none') {
+            return (
+              <span key={date} className={`${cls}${date > t ? ' future' : ''}`} role="gridcell">
+                <span className="cal-num">{day}</span>
+              </span>
+            );
+          }
+          const label = `${formatDate(date, { weekday: 'long', month: 'long', day: 'numeric' })}: ${STATUS_LABEL[cell.status]}${
+            cell.items.length > 1 ? ` (${cell.taken} of ${cell.items.length} taken)` : ''
+          }`;
+          return (
+            <button key={date} className={cls} role="gridcell" aria-label={label} title={label} onClick={() => onPick(title, cell)}>
+              <span className="cal-num">{day}</span>
+              <span className={`cell ${cell.status}${showsCount(cell) ? ' has-count' : ''}`} aria-hidden="true">
+                <Glyph cell={cell} />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <Legend />
+    </section>
   );
 }
 

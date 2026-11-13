@@ -3,6 +3,7 @@ import { Archive, ArchiveRestore, PackagePlus, Pencil, Plus, Trash2, TriangleAle
 import { Bottle, Field, ICON_LABELS, NumberInput, PillMark, Sheet, Stepper } from '../components/ui';
 import { DAY_LETTERS, DAY_NAMES, formatDate, today } from '../lib/dates';
 import { activeSchedules, defaultIcon, describeSchedule, formatQty, iconOf, indexDoses, reviseSchedules, supplyOf, uid, unitLabel, type Supply } from '../lib/logic';
+import { sounds } from '../lib/sounds';
 import { dispatch, useStore } from '../lib/store';
 import { MED_COLORS, MED_FORMS, MED_ICONS, cssColor, isCustomColor, type AppState, type FollowUp, type Med, type MedIcon, type Op, type Schedule } from '../lib/types';
 
@@ -120,13 +121,15 @@ function ShelfItem({ med, state, onOpen, onRefill }: { med: Med; state: AppState
           <span className="muted">{describeSchedule(med)}</span>
         </span>
       </button>
-      <div className="shelf-foot">
-        <span className="muted">
-          {med.refillsLeft == null ? '' : med.refillsLeft === 0 ? 'No refills left' : `${med.refillsLeft} ${med.refillsLeft === 1 ? 'refill' : 'refills'} left`}
-        </span>
+      <div className="shelf-side">
         <button className={`btn small${supply.level !== 'ok' ? ' primary' : ''}`} onClick={onRefill}>
           <PackagePlus size={18} /> Refill
         </button>
+        {med.refillsLeft != null && (
+          <span className="shelf-refills muted">
+            {med.refillsLeft === 0 ? 'No refills left' : `${med.refillsLeft} ${med.refillsLeft === 1 ? 'refill' : 'refills'} left`}
+          </span>
+        )}
       </div>
     </article>
   );
@@ -271,6 +274,7 @@ function RefillSheet({ med, state, onClose }: { med: Med; state: AppState; onClo
   const save = () => {
     if (!valid) return;
     dispatch({ type: 'refill.add', refill: { id: uid(), medId: med.id, date: today(), qty, note: note.trim() }, useRefill });
+    sounds.refill();
     onClose();
   };
 

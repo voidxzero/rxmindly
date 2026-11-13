@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNow } from '../components/ui';
 import { addDays, dateRange, formatDate, friendlyDate, today } from '../lib/dates';
 import { SCALE, activeQuestions, entryFor, journalTrends, type Question, type Trend } from '../lib/journal';
+import { sounds } from '../lib/sounds';
 import { dispatch, getSnapshot, useStore } from '../lib/store';
 import type { JournalEntry } from '../lib/types';
 
@@ -27,7 +28,8 @@ export function Journal() {
   const inRange = state.journal.filter((e) => e.date >= dates[0] && e.date <= t);
   const notes = inRange.filter((e) => e.note).reverse();
 
-  const answer = (question: Question, value: number) =>
+  const answer = (question: Question, value: number) => {
+    if (entry.answers[question.id] !== value) sounds.tap();
     saveEntry(date, (e) => {
       const answers = { ...e.answers };
       // Tapping the chosen answer again clears it.
@@ -35,6 +37,7 @@ export function Journal() {
       else answers[question.id] = value;
       return { ...e, answers };
     });
+  };
 
   return (
     <div className="screen">

@@ -24,8 +24,8 @@ const TABS: { id: Tab; label: string; icon: typeof Pill }[] = [
 ];
 
 // Set by a tapped reminder before React is listening.
-let openDay: (date: string) => void = () => {};
-void initReminders((date) => openDay(date));
+let openDay: (date: string, where: 'organizer' | 'journal') => void = () => {};
+void initReminders((date, where) => openDay(date, where));
 initUpdates();
 
 export function App() {
@@ -37,7 +37,11 @@ export function App() {
   const signedIn = snap.token != null;
 
   useEffect(() => {
-    openDay = (d) => {
+    openDay = (d, where) => {
+      if (where === 'journal') {
+        setTab('journal');
+        return;
+      }
       setDate(d);
       setTab('organizer');
     };
@@ -80,7 +84,7 @@ export function App() {
   }, [signedIn]);
 
   useEffect(() => {
-    if (signedIn && isNative && snap.settings.reminders) void requestReminderPermission();
+    if (signedIn && isNative && (snap.settings.reminders || snap.settings.journalReminder)) void requestReminderPermission();
   }, [signedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

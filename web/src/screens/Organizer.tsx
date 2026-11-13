@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Clock, Plus, SkipForward, TriangleAlert, Undo2 } from 'lucide-react';
 import { PillMark, Sheet, useNow } from '../components/ui';
 import { celebrate } from '../lib/celebrate';
+import { sounds } from '../lib/sounds';
 import { DAY_LETTERS, addDays, dateTimeOf, dayOfWeek, formatClock, formatDate, formatDuration, formatTime, friendlyDate, nowTime, partOfDay, timeOf, toDateStr, today, weekStart } from '../lib/dates';
 import { dueOn, groupByTime, indexDoses, phaseOf, supplyOf, uid, unitLabel, type DoseIndex, type DueItem } from '../lib/logic';
 import { dispatch, getSnapshot, useStore } from '../lib/store';
@@ -33,9 +34,17 @@ function take(origin: Element | null, items: DueItem[], takenAt = new Date()) {
   const { state } = getSnapshot();
   const dayDone = dueOn(state, items[0].date, indexDoses(state)).every((i) => i.dose?.status === 'taken');
   celebrate(origin, dayDone);
+  if (dayDone) sounds.dayDone();
+  else sounds.take();
 }
-const skip = (item: DueItem) => dispatch({ type: 'dose.put', dose: doseFor(item, 'skipped') });
-const undo = (doseId: string) => dispatch({ type: 'dose.delete', id: doseId });
+const skip = (item: DueItem) => {
+  dispatch({ type: 'dose.put', dose: doseFor(item, 'skipped') });
+  sounds.skip();
+};
+const undo = (doseId: string) => {
+  dispatch({ type: 'dose.delete', id: doseId });
+  sounds.undo();
+};
 
 export function Organizer(props: { date: string; onDate: (date: string) => void; onOpenCabinet: (addNew?: boolean) => void }) {
   const { state } = useStore();
@@ -411,6 +420,7 @@ function AsNeeded({ meds, state, date, isToday }: { meds: Med[]; state: AppState
       dose: { id, medId: med.id, scheduleId: null, date: today(), time: nowTime(), status: 'taken', qty: 1, takenAt: new Date().toISOString() },
     });
     celebrate(button);
+    sounds.take();
   };
   return (
     <article className="slot">

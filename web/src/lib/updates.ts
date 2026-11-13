@@ -8,7 +8,6 @@
 import { useSyncExternalStore } from 'react';
 import { App } from '@capacitor/app';
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
-import { getSnapshot } from './store';
 
 /** Where releases are published. */
 export const UPDATE_REPO = 'voidxzero/rxmindly';
@@ -18,7 +17,7 @@ const MIN_GAP_MS = 5 * 60_000;
 interface UpdaterPlugin {
   canInstall(): Promise<{ allowed: boolean }>;
   openInstallSettings(): Promise<void>;
-  install(options: { url: string; token: string }): Promise<void>;
+  install(options: { url: string }): Promise<void>;
   addListener(event: 'progress', handler: (p: { received: number; total: number }) => void): Promise<PluginListenerHandle>;
 }
 const Updater = registerPlugin<UpdaterPlugin>('Updater');
@@ -81,12 +80,10 @@ export async function checkForUpdate(force = false) {
   set({ status: 'checking', error: null });
   try {
     const current = state.current ?? (await App.getInfo()).version;
-    const token = getSnapshot().settings.githubToken.trim();
     const res = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
-      headers: { Accept: 'application/vnd.github+json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { Accept: 'application/vnd.github+json' },
     });
-    if (res.status === 401) throw new Error('GitHub didn’t accept the access token.');
-    if (res.status === 404) throw new Error(token ? 'No release found. Check that the access token can read the repository.' : 'No release found. If the repository is private, add an access token below.');
+    if (res.status === 404) throw new Error('No release found.');
     if (!res.ok) throw new Error(`GitHub answered with an error (${res.status}).`);
     const release = (await res.json()) as Release;
     const apk = release.assets?.find((a) => a.name.endsWith('.apk'));
@@ -109,7 +106,7 @@ export async function installUpdate() {
     set({ status: 'downloading', progress: null, error: null, askedPermission: false });
     const handle = await Updater.addListener('progress', (p) => set({ progress: p.total > 0 ? p.received / p.total : null }));
     try {
-      await Updater.install({ url: state.assetUrl!, token: getSnapshot().settings.githubToken.trim() });
+      await Updater.install({ url: state.assetUrl! });
     } finally {
       void handle.remove();
     }

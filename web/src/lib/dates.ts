@@ -24,6 +24,12 @@ export function addDays(date: string, n: number): string {
   return toDateStr(d);
 }
 
+/** The month (YYYY-MM) n months after the given one. */
+export function addMonths(month: string, n: number): string {
+  const [y, m] = month.split('-').map(Number);
+  return toDateStr(new Date(y, m - 1 + n, 1)).slice(0, 7);
+}
+
 export const dayOfWeek = (date: string) => fromDateStr(date).getDay();
 
 export const weekStart = (date: string) => addDays(date, -dayOfWeek(date));

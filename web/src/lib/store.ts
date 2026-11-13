@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { ApiError, api, type Session } from './api';
+import { ApiError, api, findServer, type Session } from './api';
 import { applyOp } from './logic';
 import { EMPTY_STATE, type AppState, type Op } from './types';
 
@@ -7,8 +7,11 @@ export interface Settings {
   reminders: boolean;
   /** Minutes before a second nudge for pills still not taken; 0 turns it off. */
   followUpMinutes: number;
-  /** Only needed to update the Android app when its GitHub repository is private. Kept on this device. */
-  githubToken: string;
+  /** A daily nudge to write in the journal, at journalReminderTime (HH:MM). Skipped on days already written. */
+  journalReminder: boolean;
+  journalReminderTime: string;
+  /** Little sounds when taking, skipping or refilling. */
+  sounds: boolean;
 }
 
 export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error';
@@ -51,7 +54,7 @@ function firstBatch(outbox: Op[]): Op[] {
   }
   return outbox.slice(0, n);
 }
-const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, githubToken: '' };
+const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, journalReminder: false, journalReminderTime: '20:00', sounds: true };
 
 function load(): Snapshot {
   const base: Snapshot = {
@@ -205,6 +208,25 @@ async function learnInstanceId(url: string) {
     if (status.app === 'rxmindly' && status.instanceId && snapshot.serverUrl === url && !snapshot.instanceId) set({ instanceId: status.instanceId });
   } catch {
     /* next time */
+  }
+}
+
+export type AddressCheck = { ok: true; ms: number } | { ok: false; reason: string };
+
+/**
+ * The "Test connection" button: does this address answer as this same server?
+ * It only asks /api/status, so no sign-in token is ever sent.
+ */
+export async function checkAddress(address: string): Promise<AddressCheck> {
+  const started = Date.now();
+  try {
+    const { status } = await findServer(address, PROBE_MS);
+    if (snapshot.instanceId && status.instanceId !== snapshot.instanceId) {
+      return { ok: false, reason: 'A Rxmindly server answers there, but it isn’t yours' };
+    }
+    return { ok: true, ms: Date.now() - started };
+  } catch (err) {
+    return { ok: false, reason: err instanceof ApiError && err.status !== 0 ? err.message : 'Can’t reach it' };
   }
 }
 

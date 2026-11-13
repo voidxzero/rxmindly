@@ -4,6 +4,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications';
 import { addDays, dateTimeOf, formatTime, fromDateStr, today } from './dates';
+import { entryFor } from './journal';
 import { dueOn, indexDoses, supplyOf, unitLabel, type DueItem } from './logic';
 import { dispatch, getSnapshot, subscribe } from './store';
 import type { Dose } from './types';
@@ -12,6 +13,7 @@ import { updateWidget } from './widget';
 export const isNative = Capacitor.isNativePlatform();
 
 const CHANNEL = 'doses';
+const JOURNAL_CHANNEL = 'journal';
 const ACTION_TYPE = 'DOSE';
 const HORIZON_DAYS = 14;
 // Android keeps at most 500 alarms per app; stay well under it. The soonest are kept.
@@ -20,6 +22,9 @@ const SNOOZE_MINUTES = 10;
 const LOW_STOCK_ID = 1;
 const TEST_ID = 2;
 const SNOOZE_KEY = 'rxmindly.snoozes';
+// Journal reminders use ids 100–131, one per day, cycling.
+const FIRST_JOURNAL_ID = 100;
+const JOURNAL_ID_SLOTS = 32;
 
 type Kind = 0 | 1 | 2; // first reminder, follow-up, snooze
 
@@ -44,6 +49,28 @@ function notificationId(doseId: string, kind: Kind): number {
   return FIRST_DOSE_ID + ((h >>> 0) % (0x7fffffff - FIRST_DOSE_ID));
 }
 
+function journalId(date: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  return FIRST_JOURNAL_ID + (Math.round(Date.UTC(y, m - 1, d) / 86_400_000) % JOURNAL_ID_SLOTS);
+}
+const isJournalId = (id: number) => id >= FIRST_JOURNAL_ID && id < FIRST_JOURNAL_ID + JOURNAL_ID_SLOTS;
+
+/** A day's journal counts as written once it has any answer or a note. */
+const journalWritten = (date: string, state = getSnapshot().state) => {
+  const entry = entryFor(state, date);
+  return Object.keys(entry.answers).length > 0 || entry.note.trim() !== '';
+};
+
+// A few gentle ways to ask, so the nudge doesn't read the same every night.
+const JOURNAL_NUDGES: { title: string; body: string }[] = [
+  { title: 'How are you feeling today?', body: 'Take a quiet minute just for you, and tell your journal about it. 💛' },
+  { title: 'A little check-in, just for you', body: 'Your journal would love to hear how today went.' },
+  { title: 'You’re doing great', body: 'Want to jot down how today felt? It only takes a moment. 🌷' },
+  { title: 'Your journal is saving you a spot', body: 'Whenever you’re ready, a few taps is all it takes.' },
+  { title: 'Time to be kind to yourself', body: 'Checking in on how you feel is a lovely little habit. 🌙' },
+];
+const journalNudge = (date: string) => JOURNAL_NUDGES[journalId(date) % JOURNAL_NUDGES.length];
+
 /** Doses that still want a reminder: not yet recorded, and with a known time. */
 const pendingOn = (date: string, state = getSnapshot().state, doses = indexDoses(state)) =>
   dueOn(state, date, doses).filter((item) => !item.dose && !item.estimated);
@@ -67,8 +94,10 @@ async function clearStaleReminders() {
       for (const kind of [0, 1, 2] as Kind[]) live.add(notificationId(item.doseId, kind));
     }
   }
+  // Today's journal reminder stays until today is written; older ones always go.
+  if (!journalWritten(start, state)) live.add(journalId(start));
   const delivered = await LocalNotifications.getDeliveredNotifications();
-  const stale = delivered.notifications.filter((n) => n.id >= FIRST_DOSE_ID && !live.has(n.id));
+  const stale = delivered.notifications.filter((n) => (n.id >= FIRST_DOSE_ID || isJournalId(n.id)) && !live.has(n.id));
   if (stale.length) await LocalNotifications.removeDeliveredNotifications({ notifications: stale });
 }
 
@@ -114,7 +143,7 @@ function build(): LocalNotificationSchema[] {
   // One notification per dose. Starts from yesterday: a follow-up dose to a
   // late-evening dose can come due after midnight. A follow-up dose gets its
   // reminder once the dose before it is recorded and its time is known.
-  for (let i = -1; i < HORIZON_DAYS; i++) {
+  for (let i = -1; i < HORIZON_DAYS && settings.reminders; i++) {
     for (const item of pendingOn(addDays(start, i), state, doses)) {
       add(item, 0, item.at);
       if (settings.followUpMinutes > 0) {
@@ -125,8 +154,24 @@ function build(): LocalNotificationSchema[] {
     }
   }
   out.sort((a, b) => a.schedule!.at!.getTime() - b.schedule!.at!.getTime());
-  out.splice(MAX_NOTIFICATIONS - 1); // leaves room for the low-stock reminder
+  out.splice(MAX_NOTIFICATIONS - 1 - HORIZON_DAYS); // leaves room for the low-stock and journal reminders
 
+  if (settings.journalReminder) {
+    for (let i = 0; i < HORIZON_DAYS; i++) {
+      const date = addDays(start, i);
+      const at = dateTimeOf(date, settings.journalReminderTime || '20:00');
+      if (at.getTime() <= now || journalWritten(date, state)) continue;
+      out.push({
+        id: journalId(date),
+        ...journalNudge(date),
+        schedule: { at, allowWhileIdle: true },
+        channelId: JOURNAL_CHANNEL,
+        extra: { journal: date },
+      });
+    }
+  }
+
+  if (!settings.reminders) return out;
   const low = state.meds.filter((m) => !m.archivedAt && supplyOf(m, state).level !== 'ok');
   if (low.length) {
     const at = dateTimeOf(addDays(start, 1), '09:00');
@@ -166,7 +211,7 @@ async function reschedule() {
   if (pending.notifications.length) {
     await LocalNotifications.cancel({ notifications: pending.notifications.map((n) => ({ id: n.id })) });
   }
-  if (!token || !settings.reminders) return;
+  if (!token || (!settings.reminders && !settings.journalReminder)) return;
   if ((await LocalNotifications.checkPermissions()).display !== 'granted') return;
   const notifications = build();
   if (notifications.length) await LocalNotifications.schedule({ notifications });
@@ -190,7 +235,7 @@ function takeDose(date: string, doseId: string) {
   });
 }
 
-export async function initReminders(onOpenDay: (date: string) => void) {
+export async function initReminders(onOpenDay: (date: string, where: 'organizer' | 'journal') => void) {
   if (!isNative) return;
   await LocalNotifications.createChannel({
     id: CHANNEL,
@@ -199,6 +244,13 @@ export async function initReminders(onOpenDay: (date: string) => void) {
     importance: 5,
     visibility: 1,
     vibration: true,
+  });
+  await LocalNotifications.createChannel({
+    id: JOURNAL_CHANNEL,
+    name: 'Journal reminders',
+    description: 'A gentle daily nudge to write in your journal',
+    importance: 3,
+    visibility: 1,
   });
   await LocalNotifications.registerActionTypes({
     types: [
@@ -212,7 +264,11 @@ export async function initReminders(onOpenDay: (date: string) => void) {
     ],
   });
   await LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
-    const { date, doseId } = (event.notification.extra ?? {}) as { date?: string; doseId?: string };
+    const { date, doseId, journal } = (event.notification.extra ?? {}) as { date?: string; doseId?: string; journal?: string };
+    if (journal) {
+      onOpenDay(journal, 'journal');
+      return;
+    }
     if (!date) return;
     if (doseId && event.actionId === 'take') {
       takeDose(date, doseId);
@@ -223,7 +279,7 @@ export async function initReminders(onOpenDay: (date: string) => void) {
       ]);
       rescheduleReminders();
     }
-    onOpenDay(date);
+    onOpenDay(date, 'organizer');
   });
 
   let last = getSnapshot();

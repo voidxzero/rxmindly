@@ -16,6 +16,7 @@ Self-hosted prescription tracker and medicine reminder. Three parts: a server in
   - `src/lib/reminders.ts` Android local notifications (no-op in a browser)
   - `src/lib/transfer.ts`, `csv.ts` import and export: CSV per kind of data, and the JSON backup
   - `src/lib/widget.ts` hands the Android home screen widget its data
+  - `src/lib/sounds.ts` the little sounds (Web Audio, no files), switched off in Settings
   - `src/lib/updates.ts` Android self-update from GitHub releases (checks when the app comes into view; no timer)
   - `android/app/src/main/java/app/rxmindly/` hand-written native code: `NextDoseWidget` (the widget), `WidgetBridgePlugin` (how the web side reaches it) and `UpdaterPlugin` (downloads and installs an update) and `FileSaverPlugin` (Android's "save to" screen for exports; a download link does nothing in the app's web view, so always save through `saveFile()` in `src/lib/save-file.ts`)
   - `src/screens/` Organizer, Cabinet, Journal, History, Settings, Login
@@ -62,7 +63,7 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - Node 24 is installed per-user in `~/.local/opt/`, linked from `~/.local/bin` (no sudo on the dev machine). The Android SDK and JDK are not installed, so `./build-apk.sh` doesn't run locally; the release workflow builds the APK.
 - Headless Chromium for checking the web app: Playwright's `chromium-headless-shell` in `~/.cache/ms-playwright`, with the system libraries and fonts it needs unpacked (no sudo) into `~/.local/opt/chromium-libs`. Run `. ~/.local/opt/chromium-libs/env.sh` first, or the browser can't find its libraries and crashes on the first text it draws. Playwright itself isn't a project dependency; install it in the scratchpad (`npm i playwright@1.56.1`) and point a throwaway server at a temp database (`PORT=8099 RXMINDLY_DB=<tmp>/test.db node src/index.js`, serves `web/dist`).
 - **Every APK must be signed with the same key** or Android refuses it as an update. The key is `~/.config/rxmindly/release.jks` with its password in `keystore.properties` beside it; the release workflow reads a copy from the repo's `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` secrets. Never commit it, never regenerate it, never print the password. Without the key the build falls back to the debug key, which is only good for a fresh install.
-- The repository is public (since 2026-11-13), so the phone checks and downloads releases with no token. The access-token field in Settings exists only in case the repo is ever made private again.
+- The repository is public (since 2026-11-13), so the phone checks and downloads releases with no token. The Settings field for a GitHub token was removed; `UpdaterPlugin` still accepts an optional `token` should the repo ever go private again.
 
 ## Deployment (the user's server)
 
@@ -77,13 +78,13 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - Server and logic tests pass. The web app was checked in headless Chromium at phone and desktop sizes, light and dark.
 - **The home screen widget, stale-notification clearing, pull-to-sync and swipe between days have only been compiled or tried with simulated touches**, never on a real phone.
 - The user installed the first Android build on their phone on 2026-11-11 and reported it working. Nothing added since has been confirmed on a device: the emulator cannot run on the dev machine, so native changes are only ever compiled here.
-- The web app has no reminders; they come only from the Android app. Reminders are scheduled 14 days ahead each time the app runs.
+- The web app has no reminders; they come only from the Android app. The daily journal reminder (off by default) is part of the same schedule and is skipped on days already written. Reminders are scheduled 14 days ahead each time the app runs.
 
 ## Conventions
 
 - UI text is plain, American spelling, and uses the real-life metaphors: "pill organizer", "medicine cabinet", "bottle", "refill".
 - A medicine's picture is `med.icon` (`MED_ICONS`); empty means "follow the form" (`iconOf`). The list exists in `web/src/lib/types.ts` and `server/src/store.js`; keep them the same.
-- Animations (`lib/celebrate.ts`, the `.fresh` classes) must stay off under `prefers-reduced-motion`.
+- Animations (`lib/celebrate.ts`, the `.fresh` classes, the overdue-pill wiggle and low-bottle wobble) must stay off under `prefers-reduced-motion`.
 - Journal questions all run 1 (low) to 5 (high), and the built-in ones are worded so 5 is the good end, which keeps every chart reading the same way.
 - Chart status colors (taken / some taken / missed / skipped) always carry an icon or number as well as color.
 - The app was called Mediminder until 2026-11-12 and was renamed throughout with no carry-over for old installs (there was no data to keep). The old name should not appear anywhere in the code.
