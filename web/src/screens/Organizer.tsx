@@ -125,8 +125,9 @@ export function Organizer(props: { date: string; onDate: (date: string) => void;
           )}
         </div>
         {items.length > 0 && (
-          <div className="progress" role="img" aria-label={`${done} of ${items.length} taken`}>
-            <span style={{ width: `${(done / items.length) * 100}%` }} />
+          <div className={`progress${done === items.length ? ' complete' : ''}`} role="img" aria-label={`${done} of ${items.length} taken`}>
+            {/* Warms from amber toward green as doses are taken, and is fully green once they all are. */}
+            <span style={{ width: `${(done / items.length) * 100}%`, background: `color-mix(in oklab, var(--good) ${Math.round((done / items.length) * 100)}%, var(--warn))` }} />
           </div>
         )}
 

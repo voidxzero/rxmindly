@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Bell, Check, Download, KeyRound, LogOut, Plus, RefreshCw, Trash2, Upload, Wifi, X } from 'lucide-react';
+import { QuestionInput } from '../components/JournalInput';
 import { Field, Sheet } from '../components/ui';
 import { ApiError, api } from '../lib/api';
 import { formatClock, today } from '../lib/dates';
@@ -384,6 +385,8 @@ function JournalQuestions() {
     void serverHasFeature('journal-decimals').then(setSupported);
   }, []);
   const locked = supported !== true && max === 5 && settings.journalScaleKind === 'numbers';
+  // The preview's answer lives only here; nothing is saved.
+  const [sample, setSample] = useState<number | null>(4);
   const [text, setText] = useState('');
   const own = customQuestions(state);
   const add = (e: React.FormEvent) => {
@@ -447,6 +450,19 @@ function JournalQuestions() {
           ))}
         </div>
       </Field>
+      <div className="field">
+        <span className="field-label">Preview</span>
+        <div className="scale-preview">
+          <QuestionInput
+            key={`${settings.journalScaleKind}-${max}`}
+            question={{ ...DEFAULT_QUESTIONS[0], id: 'preview' }}
+            value={sample}
+            max={max}
+            slider={settings.journalScaleKind === 'slider'}
+            onAnswer={setSample}
+          />
+        </div>
+      </div>
       {locked && supported === false && <p className="note warn">Other scales and the slider need your server updated to the latest version first.</p>}
       {locked && supported === null && <p className="note warn">Can’t reach your server to check it supports other scales. Try again when it’s back.</p>}
       <h3 className="section-title">Questions</h3>

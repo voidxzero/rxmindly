@@ -70,7 +70,8 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - Runs with `docker compose up -d --build` from the project folder on the server, kept under `/home/richard/docker/`.
 - Published on host port **8060** (container port stays 8080).
 - Data is a bind mount, `./data:/data`: the database is `data/rxmindly.db` beside the compose file. The folder must be owned by uid 1000, the container's user.
-- The project is copied to the server by hand over SFTP. Only `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `server/` and `web/` (without `node_modules`, `dist`, `android`) are needed there. Never copy over or delete the server's `data/` folder.
+- `update-docker.sh` does the copy and rebuild. It is the user's own script and lives in the docker folder on the server (`~/docker/rxmindly`, run from there); a working copy sits untracked in the project root. Never commit it (it's listed in `.git/info/exclude`).
+- Before that script, the project was copied to the server by hand over SFTP. Only `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `server/` and `web/` (without `node_modules`, `dist`, `android`) are needed there. Never copy over or delete the server's `data/` folder.
 - In the Android app the server address is entered at sign-in, e.g. `<server-ip>:8060`, with an optional local address used when the main one can't be reached. Both can be changed later in Settings → Your server (the local one without signing out).
 
 ## State of testing

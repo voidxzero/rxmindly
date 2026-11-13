@@ -1821,12 +1821,6 @@ textarea {
   resize: vertical;
 }
 
-.trends {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-  gap: 16px;
-}
-
 .trend {
   gap: 8px;
 }
@@ -1836,18 +1830,6 @@ textarea {
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-}
-
-.trend-average {
-  flex: none;
-  font-size: 1.25rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.trend-average .muted {
-  font-size: 0.8rem;
-  font-weight: 500;
 }
 
 .trend-chart {
@@ -1872,31 +1854,6 @@ textarea {
   fill: var(--muted);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
-}
-
-.trend-line {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.trend-dot {
-  fill: var(--accent);
-  stroke: var(--surface);
-  stroke-width: 2;
-}
-
-.trend-caption {
-  min-height: 1.4em;
-  font-size: 0.85rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.trend-caption .muted {
-  font-weight: 400;
 }
 
 .note-row {
@@ -2262,18 +2219,7 @@ textarea {
   flex: 0 1 auto;
 }
 
-/* Journal: range and overlap switches, and the combined chart */
-.chart-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chart-controls button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
+/* Journal: the chart's lines and legend */
 
 .overlap-line {
   fill: none;
@@ -2321,13 +2267,6 @@ textarea {
   flex: none;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-}
-
-@media (max-width: 440px) {
-  .chart-controls .segmented.compact button {
-    padding: 0 9px;
-    font-size: 0.85rem;
-  }
 }
 
 /* Journal: the note's save state, and the answer sliders */
@@ -2454,4 +2393,136 @@ textarea {
 .scale-picker-labels span.on {
   color: var(--ink);
   font-weight: 700;
+}
+
+/* Journal: locked notes and finished days, and the one chart's legend */
+.note-locked {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.note-foot,
+.chart-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.question.locked .scale button:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.question.locked .scale button.on:disabled {
+  opacity: 1;
+}
+
+.answer-slider:disabled {
+  cursor: default;
+}
+
+.answer-slider:disabled::-webkit-slider-thumb {
+  cursor: default;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 4px 8px;
+  margin: 0 -8px;
+  box-sizing: content-box;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.legend-item[aria-pressed='true'] {
+  background: var(--surface-2);
+}
+
+.legend-item.off {
+  opacity: 0.45;
+}
+
+.overlap-legend {
+  gap: 0;
+}
+
+/* Settings: what the journal will look like */
+.scale-preview {
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+}
+
+.scale-preview .question {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.question.locked .answer-slider {
+  filter: saturate(0.6);
+  opacity: 0.85;
+}
+
+/* Organizer: the day's progress bar fills in from amber to green */
+.progress span {
+  transition:
+    width 0.25s,
+    background-color 0.4s;
+}
+
+@keyframes progress-done {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  40% {
+    transform: scaleY(1.6);
+  }
+}
+
+.progress.complete {
+  overflow: visible;
+}
+
+.progress.complete span {
+  animation: progress-done 0.5s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress.complete span {
+    animation: none;
+  }
+}
+
+/* Cabinet: a bottle running low gets an orange box, an empty one a red box */
+.shelf-item.low {
+  background: color-mix(in srgb, var(--med-orange) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--med-orange) 55%, var(--line));
+  border-bottom-color: var(--shelf);
+}
+
+.shelf-item.out {
+  background: var(--bad-soft);
+  border-color: color-mix(in srgb, var(--bad) 60%, var(--line));
+  border-bottom-color: var(--shelf);
+}
+
+.shelf-item.low .shelf-supply {
+  color: color-mix(in srgb, var(--med-orange) 70%, var(--ink));
 }
