@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Check, Download, KeyRound, LogOut, Plus, RefreshCw, Trash2, Upload, Wifi, X } from 'lucide-react';
+import { Bell, Check, Download, KeyRound, LogOut, Pencil, Plus, RefreshCw, Trash2, Upload, Wifi, X } from 'lucide-react';
 import { QuestionInput } from '../components/JournalInput';
 import { Field, Sheet } from '../components/ui';
 import { ApiError, api } from '../lib/api';
@@ -11,15 +11,15 @@ import { EMPTY_STATE, type AppState } from '../lib/types';
 import { checkForUpdate, installUpdate, updateAvailable, useUpdates } from '../lib/updates';
 import { uid } from '../lib/logic';
 import { isNative, reminderPermission, requestReminderPermission, sendTestReminder, type ReminderPermission } from '../lib/reminders';
-import { activeUrl, checkAddress, dispatch, serverHasFeature, setBackupUrl, signOut, sync, updateSettings, useStore, withServer, type AddressCheck } from '../lib/store';
+import { activeUrl, changeServerUrl, checkAddress, dispatch, serverHasFeature, setBackupUrl, signOut, sync, updateSettings, useStore, withServer, type AddressCheck } from '../lib/store';
 
-export function syncSummary(snap: ReturnType<typeof useStore>): { text: string; tone: 'ok' | 'warn' } {
+export function syncSummary(snap: ReturnType<typeof useStore>): { text: string; tone: 'ok' | 'warn' | 'bad' | 'info' } {
   const waiting = snap.outbox.length;
   const queued = waiting ? ` ${waiting} ${waiting === 1 ? 'change is' : 'changes are'} saved on this device and will be sent when it’s back.` : '';
   if (snap.syncStatus === 'offline') return { text: `Can’t reach your server.${queued}`, tone: 'warn' };
-  if (snap.syncStatus === 'error') return { text: `Sync problem: ${snap.syncError}.${queued}`, tone: 'warn' };
-  if (snap.syncStatus === 'syncing') return { text: 'Syncing…', tone: 'ok' };
-  if (!snap.lastSyncAt) return { text: 'Not synced yet', tone: 'ok' };
+  if (snap.syncStatus === 'error') return { text: `Sync problem: ${snap.syncError}.${queued}`, tone: 'bad' };
+  if (snap.syncStatus === 'syncing') return { text: 'Syncing…', tone: 'info' };
+  if (!snap.lastSyncAt) return { text: 'Not synced yet', tone: 'info' };
   return { text: `Saved to your server at ${formatClock(snap.lastSyncAt)}`, tone: 'ok' };
 }
 
@@ -79,10 +79,12 @@ export function Settings() {
       <section className="card">
         <h2 className="card-title">Your server</h2>
         {isNative && <ServerAddresses />}
-        <p className={`note ${summary.tone}`}>{summary.text}</p>
         <button className="btn" onClick={() => void sync()} disabled={snap.syncStatus === 'syncing'}>
           <RefreshCw size={18} /> Sync now
         </button>
+        <p className={`note ${summary.tone}`} role="status">
+          {summary.tone === 'ok' && <Check size={16} strokeWidth={3} />} {summary.text}
+        </p>
       </section>
 
       <section className="card">
@@ -284,48 +286,115 @@ export function Settings() {
 /** Android only: the main address, the optional local one, and which is in use. */
 function ServerAddresses() {
   const snap = useStore();
-  const [backup, setBackup] = useState(snap.backupUrl);
   const inUse = activeUrl(snap);
-  const changed = backup.trim().replace(/\/+$/, '') !== snap.backupUrl;
+  // Which address is open for editing; the boxes stay hidden until an address is tapped.
+  const [editing, setEditing] = useState<'main' | 'local' | null>(null);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const [testing, setTesting] = useState(false);
   const [results, setResults] = useState<{ label: string; address: string; result: AddressCheck }[] | null>(null);
-  // Tests what's typed in the local box, so an address can be tried before saving it.
+
+  const open = (which: 'main' | 'local') => {
+    setEditing(which);
+    setDraft(which === 'main' ? snap.serverUrl : snap.backupUrl);
+    setError('');
+    setResults(null);
+  };
+  const close = () => {
+    setEditing(null);
+    setError('');
+  };
+  const save = async () => {
+    if (editing === 'local') {
+      setBackupUrl(draft);
+      return close();
+    }
+    if (!draft.trim()) return setError('Enter the address.');
+    setBusy(true);
+    const refused = await changeServerUrl(draft);
+    setBusy(false);
+    if (refused) setError(refused);
+    else close();
+  };
+  // Tests what's typed in an open box too, so an address can be tried before saving it.
   const test = async () => {
-    const targets = [{ label: 'Main', address: snap.serverUrl }];
-    if (backup.trim()) targets.push({ label: 'Local', address: backup.trim() });
+    const main = editing === 'main' && draft.trim() ? draft.trim() : snap.serverUrl;
+    const local = editing === 'local' ? draft.trim() : snap.backupUrl;
+    const targets = [{ label: 'Main', address: main }];
+    if (local) targets.push({ label: 'Local', address: local });
     setTesting(true);
     setResults(null);
     setResults(await Promise.all(targets.map(async (t) => ({ ...t, result: await checkAddress(t.address) }))));
     setTesting(false);
   };
+
+  const editor = (which: 'main' | 'local') => (
+    <div className="address-editor">
+      <input
+        className="input"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && void save()}
+        inputMode="url"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        autoFocus
+        placeholder={which === 'main' ? 'meds.example.com or 203.0.113.5:8060' : '192.168.1.20:8060'}
+        aria-label={which === 'main' ? 'Main address' : 'Local address'}
+      />
+      <p className="field-hint">
+        {which === 'main'
+          ? 'It must be this same server. You stay signed in.'
+          : 'Used when the main address can’t be reached, such as your server’s address on your home Wi-Fi.'}
+      </p>
+      {error && <p className="field-error">{error}</p>}
+      <div className="button-row">
+        <button className="btn" onClick={close} disabled={busy}>
+          Cancel
+        </button>
+        {which === 'local' && snap.backupUrl && (
+          <button
+            className="btn"
+            onClick={() => {
+              setBackupUrl('');
+              close();
+            }}
+          >
+            Remove
+          </button>
+        )}
+        <button className="btn primary" onClick={() => void save()} disabled={busy || (which === 'local' && !draft.trim())}>
+          {busy ? 'Checking…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+
+  const row = (which: 'main' | 'local', label: string, address: string) =>
+    editing === which ? (
+      <div className="address-row open" key={which}>
+        <span className="address-label">{label}</span>
+        {editor(which)}
+      </div>
+    ) : (
+      <button className="address-row" key={which} onClick={() => open(which)} aria-label={`${label}: ${address || 'none'}. Tap to change.`}>
+        <span className="address-label">{label}</span>
+        <span className="address-value">
+          {address || <span className="muted">Add one</span>}
+          {snap.backupUrl && address && inUse === address && <span className="muted"> · in use</span>}
+        </span>
+        <Pencil size={16} className="muted" aria-hidden="true" />
+      </button>
+    );
+
   return (
     <>
-      <dl className="facts">
-        <div>
-          <dt>Main address</dt>
-          <dd>
-            {snap.serverUrl}
-            {snap.backupUrl && inUse === snap.serverUrl && <span className="muted"> · in use</span>}
-          </dd>
-        </div>
-        {snap.backupUrl && (
-          <div>
-            <dt>Local address</dt>
-            <dd>
-              {snap.backupUrl}
-              {inUse === snap.backupUrl && <span className="muted"> · in use</span>}
-            </dd>
-          </div>
-        )}
-      </dl>
-      <Field label="Local address (optional)" hint="Used when the main address can’t be reached, such as your server’s address on your home Wi-Fi.">
-        <div className="add-question">
-          <input className="input" value={backup} onChange={(e) => setBackup(e.target.value)} inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.1.20:8060" />
-          <button className="btn" disabled={!changed} onClick={() => setBackupUrl(backup)}>
-            {backup.trim() ? 'Save' : 'Remove'}
-          </button>
-        </div>
-      </Field>
+      <div className="address-list">
+        {row('main', 'Main address', snap.serverUrl)}
+        {row('local', 'Local address', snap.backupUrl)}
+      </div>
       <button className="btn" onClick={() => void test()} disabled={testing}>
         <Wifi size={18} /> {testing ? 'Testing…' : 'Test connection'}
       </button>

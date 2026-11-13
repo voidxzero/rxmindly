@@ -243,6 +243,25 @@ export async function serverHasFeature(feature: string): Promise<boolean | null>
   }
 }
 
+/**
+ * Changes the main address from Settings, without signing out. The new address
+ * must answer as this same server (same instance id) before the sign-in token
+ * is ever sent there. Returns why it was refused, or null when it was saved.
+ */
+export async function changeServerUrl(address: string): Promise<string | null> {
+  let found;
+  try {
+    found = await findServer(address, PROBE_MS);
+  } catch (err) {
+    return err instanceof ApiError && err.status !== 0 ? err.message : 'Can’t reach that address.';
+  }
+  if (!snapshot.instanceId) return 'Can’t confirm that’s the same server. Sign out and sign in with the new address instead.';
+  if (found.status.instanceId !== snapshot.instanceId) return 'A Rxmindly server answers there, but it isn’t yours.';
+  set({ serverUrl: found.url, useBackup: false });
+  syncSoon(0);
+  return null;
+}
+
 /** Sets or clears the backup address from Settings, without signing out. */
 export function setBackupUrl(address: string) {
   set({ backupUrl: address.trim().replace(/\/+$/, ''), useBackup: false });

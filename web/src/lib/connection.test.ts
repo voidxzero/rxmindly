@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { ApiError, api } from './api';
-import { activeUrl, dispatch, getSnapshot, signIn, signOut, withServer } from './store';
+import { activeUrl, changeServerUrl, dispatch, getSnapshot, signIn, signOut, withServer } from './store';
 
 const MAIN = 'https://meds.example.com';
 const LOCAL = '192.168.1.20:8060';
@@ -86,5 +86,23 @@ describe('main and local address', () => {
     await signIn({ serverUrl: 'meds.example.com', backupUrl: 'http://192.168.1.20:8060', useBackup: true, instanceId: ID }, { token: 't2', username: 'me' });
     expect(getSnapshot().outbox.length).toBe(1);
     expect(getSnapshot().state.journal.length).toBe(1);
+  });
+});
+
+describe('changing the main address', () => {
+  test('a new address for the same server is saved, with its scheme worked out', async () => {
+    await start();
+    reachable['http://203.0.113.5:8060'] = ID;
+    expect(await changeServerUrl('203.0.113.5:8060/')).toBeNull();
+    expect(getSnapshot().serverUrl).toBe('http://203.0.113.5:8060');
+    expect(getSnapshot().token).toBe('t');
+  });
+
+  test('a different server, or nothing answering, is refused and changes nothing', async () => {
+    await start();
+    reachable['https://stranger.example.com'] = 'b'.repeat(32);
+    expect(await changeServerUrl('stranger.example.com')).toMatch(/isn’t yours/);
+    expect(await changeServerUrl('nowhere.example.com')).toMatch(/reach/);
+    expect(getSnapshot().serverUrl).toBe(MAIN);
   });
 });
