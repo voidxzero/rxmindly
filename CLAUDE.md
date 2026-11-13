@@ -17,7 +17,7 @@ Self-hosted prescription tracker and medicine reminder. Three parts: a server in
   - `src/lib/transfer.ts`, `csv.ts` import and export: CSV per kind of data, and the JSON backup
   - `src/lib/widget.ts` hands the Android home screen widget its data
   - `src/lib/updates.ts` Android self-update from GitHub releases (checks when the app comes into view; no timer)
-  - `android/app/src/main/java/app/rxmindly/` hand-written native code: `NextDoseWidget` (the widget), `WidgetBridgePlugin` (how the web side reaches it) and `UpdaterPlugin` (downloads and installs an update)
+  - `android/app/src/main/java/app/rxmindly/` hand-written native code: `NextDoseWidget` (the widget), `WidgetBridgePlugin` (how the web side reaches it) and `UpdaterPlugin` (downloads and installs an update) and `FileSaverPlugin` (Android's "save to" screen for exports; a download link does nothing in the app's web view, so always save through `saveFile()` in `src/lib/save-file.ts`)
   - `src/screens/` Organizer, Cabinet, Journal, History, Settings, Login
   - `android/` Capacitor project. `android/app/src/main/assets/public` is generated; never edit it.
 - `Dockerfile`, `docker-compose.yml` — one image: builds `web/`, serves it from the server.

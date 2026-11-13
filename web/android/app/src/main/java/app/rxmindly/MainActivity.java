@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
         // Lets the web side hand the home screen widget its data.
         registerPlugin(WidgetBridgePlugin.class);
         registerPlugin(UpdaterPlugin.class);
+        registerPlugin(FileSaverPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

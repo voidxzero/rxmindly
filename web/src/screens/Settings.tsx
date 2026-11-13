@@ -5,6 +5,7 @@ import { ApiError, api } from '../lib/api';
 import { formatClock, today } from '../lib/dates';
 import { DEFAULT_QUESTIONS, customQuestions, defaultIsOn } from '../lib/journal';
 import { dosesCsv, importKindLabel, journalCsv, medicinesCsv, planImport, refillsCsv, type ImportPlan } from '../lib/transfer';
+import { saveFile } from '../lib/save-file';
 import { EMPTY_STATE, type AppState } from '../lib/types';
 import { UPDATE_REPO, checkForUpdate, installUpdate, updateAvailable, useUpdates } from '../lib/updates';
 import { uid } from '../lib/logic';
@@ -35,20 +36,19 @@ export function Settings() {
 
   const [plan, setPlan] = useState<ImportPlan | null>(null);
 
-  /** Saves a file to the computer. The data comes fresh from the server, with the whole history. */
+  /** Saves a file to the computer or phone. The data comes fresh from the server, with the whole history. */
   const exportData = async (kind: 'backup' | 'medicines' | 'doses' | 'journal' | 'refills') => {
     setMessage('');
     try {
       const data = await api.exportAll(snap.serverUrl, snap.token!);
       const state: AppState = { ...EMPTY_STATE, ...(data as Partial<AppState>) };
       const csv = { medicines: medicinesCsv, doses: dosesCsv, journal: journalCsv, refills: refillsCsv };
-      const blob = kind === 'backup' ? new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }) : new Blob(['\uFEFF', csv[kind](state)], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = kind === 'backup' ? `rxmindly-${today()}.json` : `rxmindly-${kind}-${today()}.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
+      const saved =
+        kind === 'backup'
+          ? await saveFile(`rxmindly-${today()}.json`, 'application/json', JSON.stringify(data, null, 2))
+          : // The byte-order mark tells spreadsheets the file is UTF-8, so accented names survive.
+            await saveFile(`rxmindly-${kind}-${today()}.csv`, 'text/csv', '\uFEFF' + csv[kind](state));
+      if (saved && isNative) setMessage('Saved.');
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Export failed');
     }
@@ -135,9 +135,8 @@ export function Settings() {
 
       <section className="card">
         <h2 className="card-title">Your data</h2>
-        {!isNative && (
-          <>
-            <p className="muted card-sub">Save a copy to this computer. The CSV files open in any spreadsheet; the full backup holds everything in one file.</p>
+        <>
+            <p className="muted card-sub">Save a copy to this {isNative ? 'phone' : 'computer'}. The CSV files open in any spreadsheet; the full backup holds everything in one file.</p>
             <div className="export-grid">
               <button className="btn" onClick={() => void exportData('medicines')}>
                 <Download size={18} /> Medicines
@@ -155,8 +154,7 @@ export function Settings() {
             <button className="btn block" onClick={() => void exportData('backup')}>
               <Download size={18} /> Full backup
             </button>
-          </>
-        )}
+        </>
         <label className="btn block file-btn">
           <Upload size={18} /> Import a file
           <input
