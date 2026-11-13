@@ -109,7 +109,8 @@ export function createApp({ dbPath, staticDir, allowSignup = false, trustProxy =
   const routes = {
     'GET /api/status': () => {
       const users = userCount();
-      return { app: 'rxmindly', version: VERSION, instanceId, setupRequired: users === 0, signupAllowed: users === 0 || allowSignup };
+      // `features` lets a newer app tell what this server accepts before relying on it.
+      return { app: 'rxmindly', version: VERSION, instanceId, features: ['journal-decimals'], setupRequired: users === 0, signupAllowed: users === 0 || allowSignup };
     },
 
     // Creates the first account. Closed afterwards unless signup is enabled.

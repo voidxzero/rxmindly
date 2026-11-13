@@ -88,11 +88,24 @@ export function History() {
   const totals = useMemo(() => totalCells(history), [history]);
   const scroller = useRef<HTMLDivElement>(null);
 
+  // A thin bar under the chart showing which part of it is in view, since it scrolls sideways.
+  const [bar, setBar] = useState<{ left: number; width: number } | null>(null);
+  const measure = () => {
+    const el = scroller.current;
+    if (!el || el.scrollWidth <= el.clientWidth + 1) return setBar(null);
+    setBar({ left: el.scrollLeft / el.scrollWidth, width: el.clientWidth / el.scrollWidth });
+  };
+
   // Open on the most recent days.
   useEffect(() => {
     const el = scroller.current;
-    if (el) el.scrollLeft = el.scrollWidth;
-  }, [range, history.rows.length]);
+    if (!el) return;
+    el.scrollLeft = el.scrollWidth;
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [range, history.rows.length, view]);
 
   const byPart = useMemo(() => {
     const parts = new Map<string, { expected: number; taken: number }>();
@@ -119,35 +132,20 @@ export function History() {
       <header className="screen-head">
         <div>
           <h1>History</h1>
-          {view === 'chart' && (
-            <p className="muted">
-              {formatDate(history.dates[0], { month: 'short', day: 'numeric' })} – {formatDate(t, { month: 'short', day: 'numeric' })}
-            </p>
-          )}
+          <p className="muted">
+            {formatDate(history.dates[0], { month: 'short', day: 'numeric' })} – {formatDate(t, { month: 'short', day: 'numeric' })}
+          </p>
         </div>
-        <div className="head-controls">
-          <div className="segmented compact" role="radiogroup" aria-label="View">
-            {(['chart', 'calendar'] as const).map((v) => (
-              <button key={v} role="radio" aria-checked={view === v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
-                {v === 'chart' ? 'Chart' : 'Calendar'}
-              </button>
-            ))}
-          </div>
-          {view === 'chart' && (
-            <div className="segmented compact" role="radiogroup" aria-label="Time range">
-              {RANGES.map((r) => (
-                <button key={r} role="radio" aria-checked={range === r} className={range === r ? 'on' : ''} onClick={() => setRange(r)}>
-                  {r} days
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="segmented compact" role="radiogroup" aria-label="Time range">
+          {RANGES.map((r) => (
+            <button key={r} role="radio" aria-checked={range === r} className={range === r ? 'on' : ''} onClick={() => setRange(r)}>
+              {r} days
+            </button>
+          ))}
         </div>
       </header>
 
-      {view === 'calendar' ? (
-        <CalendarView state={state} today={t} onPick={(title, cell) => setPicked({ title, cell })} />
-      ) : !hasData ? (
+      {!hasData ? (
         <div className="empty">
           <h3>No history yet</h3>
           <p className="muted">Once you start taking doses from the pill organizer, each day’s record shows up here.</p>
@@ -180,43 +178,63 @@ export function History() {
           </div>
 
           <section className="card">
-            <h2 className="card-title">Day by day</h2>
-            <p className="muted card-sub">Each square is one day. Tap a square to see that day’s doses.</p>
-            <div className="grid-scroll" ref={scroller}>
-              <table className="daygrid">
-                <thead>
-                  <tr>
-                    <th className="rowhead" scope="col">
-                      <span className="sr-only">Medicine</span>
-                    </th>
-                    {history.dates.map((date, i) => {
-                      const day = Number(date.slice(8));
-                      const showMonth = i === 0 || day === 1;
-                      return (
-                        <th key={date} scope="col" className={date === t ? 'is-today' : ''}>
-                          <span className="col-month">{showMonth ? formatDate(date, { month: 'short' }) : ''}</span>
-                          <span className="col-letter">{DAY_LETTERS[dayOfWeek(date)]}</span>
-                          <span className="col-day">{day}</span>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {scheduledRows.length > 1 && <GridRow label="All doses" cells={totals} today={t} onPick={(cell) => setPicked({ title: 'All doses', cell })} bold />}
-                  {history.rows.map((row) => (
-                    <GridRow
-                      key={row.med.id}
-                      label={row.med.name}
-                      mark={<PillMark med={row.med} />}
-                      cells={row.cells}
-                      today={t}
-                      onPick={(cell) => setPicked({ title: row.med.name, cell })}
-                    />
-                  ))}
-                </tbody>
-              </table>
+            <div className="card-head">
+              <h2 className="card-title">Day by day</h2>
+              <div className="segmented compact" role="radiogroup" aria-label="Show as">
+                {(['chart', 'calendar'] as const).map((v) => (
+                  <button key={v} role="radio" aria-checked={view === v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>
+                    {v === 'chart' ? 'Chart' : 'Calendar'}
+                  </button>
+                ))}
+              </div>
             </div>
+            {view === 'calendar' ? (
+              <CalendarView state={state} today={t} onPick={(title, cell) => setPicked({ title, cell })} />
+            ) : (
+              <>
+                <p className="muted card-sub">Each square is one day. Tap a square to see that day’s doses.</p>
+                <div className="grid-scroll" ref={scroller} onScroll={measure}>
+                  <table className="daygrid">
+                    <thead>
+                      <tr>
+                        <th className="rowhead" scope="col">
+                          <span className="sr-only">Medicine</span>
+                        </th>
+                        {history.dates.map((date, i) => {
+                          const day = Number(date.slice(8));
+                          const showMonth = i === 0 || day === 1;
+                          return (
+                            <th key={date} scope="col" className={date === t ? 'is-today' : ''}>
+                              <span className="col-month">{showMonth ? formatDate(date, { month: 'short' }) : ''}</span>
+                              <span className="col-letter">{DAY_LETTERS[dayOfWeek(date)]}</span>
+                              <span className="col-day">{day}</span>
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scheduledRows.length > 1 && <GridRow label="All doses" cells={totals} today={t} onPick={(cell) => setPicked({ title: 'All doses', cell })} bold />}
+                      {history.rows.map((row) => (
+                        <GridRow
+                          key={row.med.id}
+                          label={row.med.name}
+                          mark={<PillMark med={row.med} />}
+                          cells={row.cells}
+                          today={t}
+                          onPick={(cell) => setPicked({ title: row.med.name, cell })}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {bar && (
+                  <div className="scroll-hint" aria-hidden="true">
+                    <span style={{ left: `${bar.left * 100}%`, width: `${bar.width * 100}%` }} />
+                  </div>
+                )}
+              </>
+            )}
             <Legend />
           </section>
 
@@ -303,9 +321,9 @@ function CalendarView({ state, today: t, onPick }: { state: AppState; today: str
   const leading = dayOfWeek(first);
 
   return (
-    <section className="card">
+    <>
       <div className="cal-head">
-        <h2 className="card-title">{formatDate(first, { month: 'long', year: 'numeric' })}</h2>
+        <h3 className="cal-month">{formatDate(first, { month: 'long', year: 'numeric' })}</h3>
         <div className="week-nav">
           {month !== thisMonth && (
             <button className="btn small" onClick={() => setMonth(thisMonth)}>
@@ -370,8 +388,7 @@ function CalendarView({ state, today: t, onPick }: { state: AppState; today: str
           );
         })}
       </div>
-      <Legend />
-    </section>
+    </>
   );
 }
 

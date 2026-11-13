@@ -10,6 +10,9 @@ export interface Settings {
   /** A daily nudge to write in the journal, at journalReminderTime (HH:MM). Skipped on days already written. */
   journalReminder: boolean;
   journalReminderTime: string;
+  /** How the journal asks: the scale's top number and numbered buttons or a plain slider. Kept on this device. */
+  journalScale: number;
+  journalScaleKind: 'numbers' | 'slider';
   /** Little sounds when taking, skipping or refilling. */
   sounds: boolean;
 }
@@ -54,7 +57,7 @@ function firstBatch(outbox: Op[]): Op[] {
   }
   return outbox.slice(0, n);
 }
-const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, journalReminder: false, journalReminderTime: '20:00', sounds: true };
+const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, journalReminder: false, journalReminderTime: '20:00', sounds: true, journalScale: 5, journalScaleKind: 'numbers' };
 
 function load(): Snapshot {
   const base: Snapshot = {
@@ -227,6 +230,16 @@ export async function checkAddress(address: string): Promise<AddressCheck> {
     return { ok: true, ms: Date.now() - started };
   } catch (err) {
     return { ok: false, reason: err instanceof ApiError && err.status !== 0 ? err.message : 'Can’t reach it' };
+  }
+}
+
+/** Whether the server reports a feature in /api/status (servers older than the feature don't). Null when it can't be reached. */
+export async function serverHasFeature(feature: string): Promise<boolean | null> {
+  try {
+    const status = await api.status(activeUrl(snapshot), PROBE_MS);
+    return (status.features ?? []).includes(feature);
+  } catch {
+    return null;
   }
 }
 

@@ -3,14 +3,14 @@ import { Bell, Check, Download, KeyRound, LogOut, Plus, RefreshCw, Trash2, Uploa
 import { Field, Sheet } from '../components/ui';
 import { ApiError, api } from '../lib/api';
 import { formatClock, today } from '../lib/dates';
-import { DEFAULT_QUESTIONS, customQuestions, defaultIsOn } from '../lib/journal';
+import { DEFAULT_QUESTIONS, SCALE_SIZES, customQuestions, defaultIsOn } from '../lib/journal';
 import { dosesCsv, importKindLabel, journalCsv, medicinesCsv, planImport, refillsCsv, type ImportPlan } from '../lib/transfer';
 import { saveFile } from '../lib/save-file';
 import { EMPTY_STATE, type AppState } from '../lib/types';
 import { checkForUpdate, installUpdate, updateAvailable, useUpdates } from '../lib/updates';
 import { uid } from '../lib/logic';
 import { isNative, reminderPermission, requestReminderPermission, sendTestReminder, type ReminderPermission } from '../lib/reminders';
-import { activeUrl, checkAddress, dispatch, setBackupUrl, signOut, sync, updateSettings, useStore, withServer, type AddressCheck } from '../lib/store';
+import { activeUrl, checkAddress, dispatch, serverHasFeature, setBackupUrl, signOut, sync, updateSettings, useStore, withServer, type AddressCheck } from '../lib/store';
 
 export function syncSummary(snap: ReturnType<typeof useStore>): { text: string; tone: 'ok' | 'warn' } {
   const waiting = snap.outbox.length;
@@ -375,7 +375,15 @@ function AppUpdates() {
 
 /** Which questions the daily journal asks: the built-in ones can be switched off, and you can add your own. */
 function JournalQuestions() {
-  const { state } = useStore();
+  const { state, settings } = useStore();
+  const max = settings.journalScale;
+  const index = Math.max(0, SCALE_SIZES.indexOf(max as (typeof SCALE_SIZES)[number]));
+  // Anything but numbers 1–5 saves decimals, which servers before 1.2.1 refuse; check before offering it.
+  const [supported, setSupported] = useState<boolean | null>(null);
+  useEffect(() => {
+    void serverHasFeature('journal-decimals').then(setSupported);
+  }, []);
+  const locked = supported !== true && max === 5 && settings.journalScaleKind === 'numbers';
   const [text, setText] = useState('');
   const own = customQuestions(state);
   const add = (e: React.FormEvent) => {
@@ -387,7 +395,61 @@ function JournalQuestions() {
   return (
     <section className="card">
       <h2 className="card-title">Journal questions</h2>
-      <p className="muted card-sub">What the journal asks each day. Every question is answered from 1 (low) to 5 (high).</p>
+      <p className="muted card-sub">What the journal asks each day, and how you answer.</p>
+      <div className="field">
+        <span className="field-label">Answer with</span>
+        <div className="segmented" role="radiogroup" aria-label="Answer with">
+          {(['numbers', 'slider'] as const).map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              role="radio"
+              aria-checked={settings.journalScaleKind === kind}
+              className={settings.journalScaleKind === kind ? 'on' : ''}
+              disabled={locked && kind === 'slider'}
+              onClick={() => updateSettings({ journalScaleKind: kind })}
+            >
+              {kind === 'numbers' ? 'Numbers' : 'A slider'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Field
+        label={`Scale: 1 to ${max}`}
+        hint={
+          settings.journalScaleKind === 'slider'
+            ? 'The slider shows no numbers. This is the scale your charts use.'
+            : 'Every question runs from 1 (low) to this number (high). Changing it keeps your past answers; they’re just shown on the new scale.'
+        }
+      >
+        <input
+          type="range"
+          className="scale-picker"
+          min={0}
+          max={SCALE_SIZES.length - 1}
+          step={1}
+          value={index}
+          disabled={locked}
+          list="scale-sizes"
+          aria-valuetext={`1 to ${max}`}
+          onChange={(e) => updateSettings({ journalScale: SCALE_SIZES[Number(e.target.value)] })}
+        />
+        <datalist id="scale-sizes">
+          {SCALE_SIZES.map((n, i) => (
+            <option key={n} value={i} />
+          ))}
+        </datalist>
+        <div className="scale-picker-labels" aria-hidden="true">
+          {SCALE_SIZES.map((n) => (
+            <span key={n} className={n === max ? 'on' : ''}>
+              1–{n}
+            </span>
+          ))}
+        </div>
+      </Field>
+      {locked && supported === false && <p className="note warn">Other scales and the slider need your server updated to the latest version first.</p>}
+      {locked && supported === null && <p className="note warn">Can’t reach your server to check it supports other scales. Try again when it’s back.</p>}
+      <h3 className="section-title">Questions</h3>
       {DEFAULT_QUESTIONS.map((q) => (
         <label className="check" key={q.id}>
           <input type="checkbox" checked={defaultIsOn(state, q.id)} onChange={(e) => dispatch({ type: 'question.put', question: { id: q.id, text: q.text, archived: !e.target.checked } })} />

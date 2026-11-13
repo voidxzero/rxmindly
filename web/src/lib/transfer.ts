@@ -287,6 +287,9 @@ function importRefills(rows: Record<string, string>[], state: AppState): ImportP
   return plan;
 }
 
+/** A journal answer as stored: a number from 1 to 5, decimals allowed. */
+const isAnswer = (cell: string | undefined) => !!cell?.trim() && Number(cell) >= 1 && Number(cell) <= 5;
+
 function importJournal(headers: string[], rows: Record<string, string>[], state: AppState): ImportPlan {
   const plan: ImportPlan = { kind: 'journal', ops: [], summary: [], problems: [] };
   const known = journalColumns(state);
@@ -295,7 +298,7 @@ function importJournal(headers: string[], rows: Record<string, string>[], state:
   for (const header of headers) {
     const key = header.toLowerCase();
     if (key === 'date' || key === 'note' || key === 'notes' || !header) continue;
-    if (!rows.some((r) => /^[1-5]$/.test(r[key] ?? ''))) continue; // nothing usable in this column
+    if (!rows.some((r) => isAnswer(r[key]))) continue; // nothing usable in this column
     const match = known.find((q) => sameText(q.text, header) || q.id === header);
     const stored = match && state.questions.find((q) => q.id === match.id);
     if (!match) {
@@ -314,7 +317,8 @@ function importJournal(headers: string[], rows: Record<string, string>[], state:
     if (!DATE.test(row.date ?? '')) return void plan.problems.push(`Row ${i + 2}: needs a date like 2026-03-09.`);
     const old = state.journal.find((e) => e.date === row.date);
     const answers = { ...old?.answers };
-    for (const c of columns) if (/^[1-5]$/.test(row[c.key] ?? '')) answers[c.id] = Number(row[c.key]);
+    // Stored on 1–5 whatever scale the app shows, so decimals (from another scale) come back as they went out.
+    for (const c of columns) if (isAnswer(row[c.key])) answers[c.id] = Math.round(Number(row[c.key]) * 1000) / 1000;
     const entry: JournalEntry = { date: row.date, answers, note: row.note || row.notes || old?.note || '' };
     if (!Object.keys(entry.answers).length && !entry.note) return;
     plan.ops.push({ type: 'journal.put', entry });

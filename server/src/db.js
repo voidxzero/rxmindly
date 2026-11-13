@@ -87,7 +87,7 @@ const MIGRATIONS = [
     PRIMARY KEY (user_id, id)
   );
 
-  -- One journal entry per user per day: answers is a JSON object of question id -> 1..5.
+  -- One journal entry per user per day: answers is a JSON object of question id -> 1..5 (decimals allowed, whatever scale the app shows).
   CREATE TABLE journal_entries (
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     date       TEXT NOT NULL,

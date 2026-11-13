@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { applyOp, buildHistory, dailyUse, dueOn, followUpDoseId, iconOf, indexDoses, phaseOf, reviseSchedules, scheduledDoseId, supplyOf } from './logic';
-import { activeQuestions, journalTrends } from './journal';
+import { activeQuestions, formatScaled, fromScale, journalTrends, scaleTicks, toScale } from './journal';
 import { EMPTY_STATE, type AppState, type Dose, type Med, type Schedule } from './types';
 
 const schedule = (over: Partial<Schedule> = {}): Schedule => ({ id: 's1', time: '08:00', qty: 1, days: '0123456', startDate: '2026-11-01', endDate: null, ...over });
@@ -246,5 +246,24 @@ describe('app updates', () => {
     expect(isNewer('v1.2.0', '1.2.0')).toBe(false);
     expect(isNewer('1.1.9', '1.2.0')).toBe(false);
     expect(isNewer('2.0', '1.99.99')).toBe(true);
+  });
+});
+
+describe('journal scales', () => {
+  test('answers on any scale are stored on 1–5 and come back the same', () => {
+    for (const max of [5, 10, 15, 20]) {
+      for (let n = 1; n <= max; n++) expect(Math.round(toScale(fromScale(n, max), max))).toBe(n);
+      expect(fromScale(1, max)).toBe(1);
+      expect(fromScale(max, max)).toBe(5);
+    }
+    expect(fromScale(7, 10)).toBe(3.667);
+  });
+
+  test('charts write values on the chosen scale to a tenth', () => {
+    expect(formatScaled(3, 5)).toBe('3.0');
+    expect(formatScaled(3, 10)).toBe('5.5');
+    expect(formatScaled(3.667, 10)).toBe('7.0');
+    expect(scaleTicks(5)).toEqual([1, 2, 3, 4, 5]);
+    expect(scaleTicks(20)).toEqual([4, 8, 12, 16, 20]);
   });
 });

@@ -1018,6 +1018,9 @@ dialog.sheet::backdrop {
 }
 
 .take-btn.done {
+  /* The same width whatever the time says, so the buttons line up. */
+  width: 118px;
+  padding: 0 10px;
   background: var(--good-soft);
   color: var(--good-text);
   font-size: 0.9rem;
@@ -1255,6 +1258,29 @@ dialog.sheet::backdrop {
   overflow-x: auto;
   margin: 0 -16px;
   padding: 0 16px 4px 0;
+  scrollbar-width: none;
+}
+
+.grid-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Shows where the chart is scrolled to. Only an indicator: it can't be dragged. */
+.scroll-hint {
+  position: relative;
+  height: 4px;
+  margin: 6px 0 12px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  pointer-events: none;
+}
+
+.scroll-hint span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: var(--line-strong);
 }
 
 .daygrid {
@@ -1956,6 +1982,46 @@ textarea {
   animation: pull-spin 0.8s linear infinite;
 }
 
+/* After a pull-down sync: a check, or a cross when it didn't work. Sits where the spinner was. */
+.pull.done {
+  transform: translateY(24px);
+  animation: pull-result 1.4s ease-out forwards;
+}
+
+.pull.done.ok {
+  background: var(--good);
+  color: #fff;
+}
+
+.pull.done.failed {
+  background: var(--bad);
+  color: #fff;
+}
+
+@keyframes pull-result {
+  0% {
+    transform: translateY(24px) scale(0.6);
+  }
+  15% {
+    transform: translateY(24px) scale(1.1);
+  }
+  25%,
+  75% {
+    transform: translateY(24px) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(24px) scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pull.done {
+    animation: none;
+  }
+}
+
 /* ---------- Import and export ---------- */
 
 .export-grid {
@@ -1996,13 +2062,6 @@ textarea {
 }
 
 /* History: view switch and month calendar */
-.head-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
 .cal-head {
   display: flex;
   align-items: center;
@@ -2010,8 +2069,22 @@ textarea {
   gap: 8px;
 }
 
-.cal-head .card-title {
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.card-head .card-title {
   margin: 0;
+}
+
+.cal-month {
+  margin: 0;
+  font-size: 1rem;
 }
 
 .cal-filter {
@@ -2187,4 +2260,198 @@ textarea {
   align-items: center;
   gap: 4px;
   flex: 0 1 auto;
+}
+
+/* Journal: range and overlap switches, and the combined chart */
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chart-controls button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.overlap-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+.overlap-dot {
+  fill: currentColor;
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.overlap-legend {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.88rem;
+}
+
+.overlap-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.overlap-swatch {
+  flex: none;
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.overlap-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.overlap-value {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 440px) {
+  .chart-controls .segmented.compact button {
+    padding: 0 9px;
+    font-size: 0.85rem;
+  }
+}
+
+/* Journal: the note's save state, and the answer sliders */
+.save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+}
+
+.save-state.saved {
+  color: var(--good-text);
+  background: color-mix(in srgb, var(--good) 16%, var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--good) 40%, transparent);
+}
+
+.scale.many {
+  gap: 4px;
+}
+
+.scale.many button {
+  min-height: 44px;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 0.92rem;
+}
+
+.question-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.slider-number {
+  flex: none;
+  min-width: 2.2em;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.answer-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  margin: 10px 0 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--bad), var(--warn), var(--good));
+  touch-action: pan-y;
+}
+
+.answer-slider.unset {
+  opacity: 0.45;
+}
+
+.answer-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+  cursor: grab;
+}
+
+.answer-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+  cursor: grab;
+}
+
+.answer-slider.unset::-webkit-slider-thumb {
+  border-style: dashed;
+}
+
+.answer-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Settings: the journal scale picker, a slider that stops at fixed sizes */
+.scale-picker {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.scale-picker-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.scale-picker-labels span.on {
+  color: var(--ink);
+  font-weight: 700;
 }

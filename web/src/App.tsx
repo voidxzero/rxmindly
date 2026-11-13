@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { App as NativeApp } from '@capacitor/app';
-import { ChartNoAxesColumn, CloudOff, Download, LayoutGrid, NotebookPen, Pill, RefreshCw, Settings as SettingsIcon } from 'lucide-react';
+import { ChartNoAxesColumn, Check, CloudOff, Download, LayoutGrid, NotebookPen, Pill, RefreshCw, Settings as SettingsIcon, X } from 'lucide-react';
 import { handleBack } from './components/ui';
 import { today } from './lib/dates';
 import { initReminders, isNative, requestReminderPermission } from './lib/reminders';
-import { sync, useStore } from './lib/store';
+import { getSnapshot, sync, useStore } from './lib/store';
 import { initUpdates, updateAvailable, useUpdates } from './lib/updates';
 import { Cabinet } from './screens/Cabinet';
 import { History } from './screens/History';
@@ -101,6 +101,8 @@ export function App() {
   const pullFrom = useRef<number | null>(null);
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  // How the pull-down sync went, shown for a moment once it's done.
+  const [pullResult, setPullResult] = useState<'ok' | 'failed' | null>(null);
   const PULL_ENOUGH = 70;
   const onPullStart = (e: React.TouchEvent) => {
     const inSheet = (e.target as Element).closest?.('dialog');
@@ -122,7 +124,12 @@ export function App() {
     pullFrom.current = null;
     if (pull >= PULL_ENOUGH) {
       setRefreshing(true);
-      void sync().finally(() => setTimeout(() => setRefreshing(false), 400));
+      setPullResult(null);
+      void sync().finally(() => {
+        setRefreshing(false);
+        setPullResult(getSnapshot().syncStatus === 'idle' ? 'ok' : 'failed');
+        setTimeout(() => setPullResult(null), 1400);
+      });
     }
     setPull(0);
   };
@@ -146,6 +153,11 @@ export function App() {
           </button>
         ))}
       </nav>
+      {pullResult && !refreshing && pull <= 8 && (
+        <div className={`pull done ${pullResult}`} role="status" aria-label={pullResult === 'ok' ? 'Synced' : 'Sync failed'}>
+          {pullResult === 'ok' ? <Check size={22} strokeWidth={3} /> : <X size={22} strokeWidth={3} />}
+        </div>
+      )}
       {(pull > 8 || refreshing) && (
         <div className={`pull${pull >= PULL_ENOUGH ? ' ready' : ''}${refreshing ? ' busy' : ''}`} style={{ transform: `translateY(${refreshing ? 24 : pull - 30}px)`, opacity: refreshing ? 1 : Math.min(1, pull / PULL_ENOUGH) }} aria-hidden="true">
           <RefreshCw size={20} style={refreshing ? undefined : { transform: `rotate(${pull * 3}deg)` }} />

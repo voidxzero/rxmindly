@@ -71,7 +71,7 @@ describe('import', () => {
     s = applyOp(s, { type: 'dose.put', dose: { id: 's1:2026-11-10', medId: 'm1', scheduleId: 's1', date: '2026-11-10', time: '08:00', status: 'taken', qty: 1, takenAt: '2026-11-10T13:02:00.000Z' } });
     s = applyOp(s, { type: 'refill.add', refill: { id: 'r1', medId: 'm1', date: '2026-11-09', qty: 30, note: '90-day, new pharmacy' }, useRefill: true });
     s = applyOp(s, { type: 'question.put', question: { id: 'q1', text: 'How was my pain?', archived: false } });
-    s = applyOp(s, { type: 'journal.put', entry: { date: '2026-11-10', answers: { mood: 4, q1: 2 }, note: 'Fine, mostly.\nSecond line.' } });
+    s = applyOp(s, { type: 'journal.put', entry: { date: '2026-11-10', answers: { mood: 4, q1: 2.333 }, note: 'Fine, mostly.\nSecond line.' } });
 
     let copy = run(EMPTY_STATE, medicinesCsv(s)).state;
     copy = run(copy, dosesCsv(s)).state;
@@ -85,7 +85,7 @@ describe('import', () => {
     // The custom question is new here, so it gets a new id; the answers follow it.
     expect(journal.plan.summary.join(' ')).toContain('How was my pain?');
     const q = copy.questions.find((x) => x.text === 'How was my pain?')!;
-    expect(copy.journal).toEqual([{ date: '2026-11-10', answers: { mood: 4, [q.id]: 2 }, note: 'Fine, mostly.\nSecond line.' }]);
+    expect(copy.journal).toEqual([{ date: '2026-11-10', answers: { mood: 4, [q.id]: 2.333 }, note: 'Fine, mostly.\nSecond line.' }]);
 
     // And the one-file backup restores everything exactly, pill counts included.
     const restored = run(EMPTY_STATE, JSON.stringify({ exportedAt: 'x', ...s }));

@@ -214,6 +214,16 @@ test('the journal keeps one entry per day and its questions', async () => {
   const backup = await call('GET', '/api/export', { token });
   assert.equal(backup.json.journal.length, 1);
 
+  // Answers given on another scale arrive as decimals on 1–5, kept to three places.
+  res = await sync([
+    { type: 'journal.put', entry: { date: '2026-11-11', answers: { mood: 3.66666 }, note: '' } },
+    { type: 'journal.put', entry: { date: '2026-11-12', answers: { mood: 0.5 }, note: '' } },
+    { type: 'journal.put', entry: { date: '2026-11-12', answers: { mood: '4' }, note: '' } },
+  ]);
+  assert.equal(res.json.rejected.length, 2);
+  assert.deepEqual(res.json.state.journal, [{ date: '2026-11-11', answers: { mood: 3.667 }, note: '' }]);
+  assert.deepEqual((await call('GET', '/api/status')).json.features, ['journal-decimals']);
+
   // An emptied entry goes away.
   res = await sync([{ type: 'journal.put', entry: { date: '2026-11-11', answers: {}, note: '' } }]);
   assert.deepEqual(res.json.state.journal, []);

@@ -355,8 +355,9 @@ const handlers = {
     const answers = {};
     for (const key of keys) {
       const value = given[key];
-      need(Number.isInteger(value) && value >= 1 && value <= 5, 'bad journal answer');
-      answers[id(key, 'question')] = value;
+      // Stored on 1–5 whatever scale the app shows (1–10, a slider…), so decimals are fine.
+      need(typeof value === 'number' && Number.isFinite(value) && value >= 1 && value <= 5, 'bad journal answer');
+      answers[id(key, 'question')] = Math.round(value * 1000) / 1000;
     }
     const note = text(e.note, 5000);
     if (!keys.length && !note) {

@@ -15,6 +15,8 @@ export interface ServerStatus {
   version: string;
   /** Missing on servers older than 1.1.2. */
   instanceId?: string;
+  /** What this server accepts beyond the basics, e.g. "journal-decimals". Missing on older servers. */
+  features?: string[];
   setupRequired: boolean;
   signupAllowed: boolean;
 }
