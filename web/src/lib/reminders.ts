@@ -7,6 +7,7 @@ import { addDays, dateTimeOf, formatTime, fromDateStr, today } from './dates';
 import { dueOn, groupByTime, indexDoses, supplyOf, unitLabel, type DueItem } from './logic';
 import { dispatch, getSnapshot, subscribe } from './store';
 import type { Dose } from './types';
+import { updateWidget } from './widget';
 
 export const isNative = Capacitor.isNativePlatform();
 
@@ -27,10 +28,37 @@ interface Snooze {
   at: number;
 }
 
+const FIRST_DOSE_ID = 1000;
+
 function notificationId(date: string, time: string, kind: Kind): number {
   const day = Math.round((fromDateStr(date).getTime() - new Date(2024, 0, 1).getTime()) / 86400_000);
   const [h, m] = time.split(':').map(Number);
-  return 1000 + (day % 100000) * 14400 + (h * 60 + m) * 10 + kind;
+  return FIRST_DOSE_ID + (day % 100000) * 14400 + (h * 60 + m) * 10 + kind;
+}
+
+/**
+ * Takes dose reminders that no longer apply out of the notification shade:
+ * ones from earlier days (those doses now count as missed) and ones whose
+ * doses have since been taken or skipped. It can only run while the app is
+ * running, so yesterday's reminders go when the app is next opened.
+ */
+async function clearStaleReminders() {
+  const { state } = getSnapshot();
+  const doses = indexDoses(state);
+  const start = today();
+  const startOfToday = fromDateStr(start).getTime();
+  const live = new Set<number>();
+  for (const date of [addDays(start, -1), start]) {
+    for (const slot of groupByTime(dueOn(state, date, doses))) {
+      const pending = slot.items.filter((item) => !item.dose && !item.estimated);
+      // Yesterday's only still count if they came due after midnight (a late follow-up dose).
+      if (!pending.length || pending[0].at.getTime() < startOfToday) continue;
+      for (const kind of [0, 1, 2] as Kind[]) live.add(notificationId(date, slot.time, kind));
+    }
+  }
+  const delivered = await LocalNotifications.getDeliveredNotifications();
+  const stale = delivered.notifications.filter((n) => n.id >= FIRST_DOSE_ID && !live.has(n.id));
+  if (stale.length) await LocalNotifications.removeDeliveredNotifications({ notifications: stale });
 }
 
 const loadSnoozes = (): Snooze[] => {
@@ -125,6 +153,8 @@ export function rescheduleReminders() {
 
 async function reschedule() {
   const { token, settings } = getSnapshot();
+  await updateWidget().catch((err) => console.error('widget', err));
+  await clearStaleReminders().catch((err) => console.error('clearing reminders', err));
   const pending = await LocalNotifications.getPending();
   if (pending.notifications.length) {
     await LocalNotifications.cancel({ notifications: pending.notifications.map((n) => ({ id: n.id })) });

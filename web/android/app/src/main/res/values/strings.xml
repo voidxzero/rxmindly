@@ -4,4 +4,15 @@
     <string name="title_activity_main">Rxmindly</string>
     <string name="package_name">app.rxmindly</string>
     <string name="custom_url_scheme">app.rxmindly</string>
+    <string name="widget_name">Next dose</string>
+    <string name="widget_description">Shows what is overdue, or when your next dose is.</string>
+    <string name="widget_next">Next dose</string>
+    <string name="widget_next_at">Next: %1$s</string>
+    <string name="widget_overdue">Overdue since %1$s</string>
+    <string name="widget_tomorrow">Tomorrow %1$s</string>
+    <string name="widget_nothing">Nothing left to take</string>
+    <string name="widget_open">Open Rxmindly</string>
+    <string name="widget_open_sub">to show your next dose here</string>
+    <string name="widget_preview_time">8:00 PM</string>
+    <string name="widget_preview_names">Lisinopril, Metformin</string>
 </resources>

@@ -28,6 +28,20 @@ export interface Snapshot {
 }
 
 const STORAGE_KEY = 'rxmindly';
+const MAX_OPS_PER_SYNC = 1000;
+const MAX_BYTES_PER_SYNC = 500_000;
+
+/** The oldest waiting changes that fit in one request (always at least one). */
+function firstBatch(outbox: Op[]): Op[] {
+  let bytes = 0;
+  let n = 0;
+  while (n < outbox.length && n < MAX_OPS_PER_SYNC) {
+    bytes += JSON.stringify(outbox[n]).length * 2;
+    if (n > 0 && bytes > MAX_BYTES_PER_SYNC) break;
+    n += 1;
+  }
+  return outbox.slice(0, n);
+}
 const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30 };
 
 function load(): Snapshot {
@@ -116,7 +130,8 @@ export function sync(): Promise<void> {
 async function runSync() {
   const { serverUrl, token } = snapshot;
   if (!token) return;
-  const sending = snapshot.outbox;
+  // A big import goes up in batches the server will accept.
+  const sending = firstBatch(snapshot.outbox);
   set({ syncStatus: 'syncing' });
   try {
     const result = await api.sync(serverUrl, token, sending);
@@ -132,6 +147,7 @@ async function runSync() {
       syncError: null,
       loaded: true,
     });
+    if (remaining.length) syncAgain = true;
   } catch (err) {
     if (snapshot.token !== token) return;
     if (err instanceof ApiError && err.status === 401) {

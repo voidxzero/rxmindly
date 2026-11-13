@@ -14,6 +14,9 @@ Self-hosted prescription tracker and medicine reminder. Three parts: a server in
   - `src/lib/store.ts` local state in `localStorage`, outbox, sync
   - `src/lib/journal.ts` the daily journal: built-in questions, which are active, trends for the charts
   - `src/lib/reminders.ts` Android local notifications (no-op in a browser)
+  - `src/lib/transfer.ts`, `csv.ts` import and export: CSV per kind of data, and the JSON backup
+  - `src/lib/widget.ts` hands the Android home screen widget its data
+  - `android/app/src/main/java/app/rxmindly/` hand-written native code: `NextDoseWidget` (the widget) and `WidgetBridgePlugin` (how the web side reaches it)
   - `src/screens/` Organizer, Cabinet, Journal, History, Settings, Login
   - `android/` Capacitor project. `android/app/src/main/assets/public` is generated; never edit it.
 - `Dockerfile`, `docker-compose.yml` — one image: builds `web/`, serves it from the server.
@@ -38,6 +41,8 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - **Follow-up doses hang off a schedule.** `schedule.followUps` is a list of `{ afterMinutes, qty }` (a JSON column on the server). Each is due that long after the dose before it was *taken* (`takenAt`), so its time is worked out in `dueOn`, never stored. Dose ids are `<scheduleId>:<date>:<n>`, n from 1. Until the dose before is recorded the time is a guess (`estimated`) and no reminder is scheduled.
 - **Changing when a dose was taken is just `dose.put` again** with a new `takenAt` (and `time`, for as-needed doses). No separate op.
 - **The journal is one entry per day.** `journal.put` replaces that day's whole entry (`answers` is question id → 1–5, plus `note`); an entry with no answers and no note is deleted. The built-in questions live only in the app (`DEFAULT_QUESTIONS`); the server stores the user's own questions and, for a switched-off built-in one, a row with the same id and `archived`. Questions are archived, never deleted, so old answers stay.
+- **Importing is done with ops, on the client.** `planImport` turns a CSV or backup file into ordinary ops, so there is no import route on the server and importing a file twice changes nothing (rows without an id get a deterministic one). Imported doses and refills are followed by `stock.set` so old history never moves the pill count. The outbox is sent in batches (`firstBatch` in `store.ts`), because one import can queue thousands of ops.
+- **Colors are a named color or `#rrggbb`.** Always paint with `cssColor()`, never `var(--med-…)` directly. The named list exists in `types.ts`, `styles.css` (light and dark) and `server/src/store.js`.
 - **`med.put` never changes stock on an existing medicine.** Stock moves only through doses, refills and `stock.set`, so a stale edit can't undo a recorded dose.
 - **Dates and times are local strings**, `YYYY-MM-DD` and `HH:MM`, never UTC timestamps. Only `takenAt` is an ISO instant. The server does no time-zone maths.
 - **Schedules are ended, not rewritten.** Editing a time ends the old schedule (`endDate`) and starts a new one, so past days keep the schedule they had. See `reviseSchedules`.
@@ -56,7 +61,8 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 ## State of testing
 
 - Server and logic tests pass. The web app was checked in headless Chromium at phone and desktop sizes, light and dark.
-- **The Android app has only been compiled, never run.** The emulator cannot run on the dev machine. Connecting to the server, notifications, notification action buttons and safe-area layout are all unverified on a real device; treat reports from the phone as the first real test.
+- **The home screen widget, stale-notification clearing, pull-to-sync and swipe between days have only been compiled or tried with simulated touches**, never on a real phone.
+- The user installed the first Android build on their phone on 2026-11-11 and reported it working. Nothing added since has been confirmed on a device: the emulator cannot run on the dev machine, so native changes are only ever compiled here.
 - The web app has no reminders; they come only from the Android app. Reminders are scheduled 14 days ahead each time the app runs.
 
 ## Conventions
@@ -66,5 +72,5 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - Animations (`lib/celebrate.ts`, the `.fresh` classes) must stay off under `prefers-reduced-motion`.
 - Journal questions all run 1 (low) to 5 (high), and the built-in ones are worded so 5 is the good end, which keeps every chart reading the same way.
 - Chart status colors (taken / some taken / missed / skipped) always carry an icon or number as well as color.
-- The app was called Mediminder until 2026-11-12 and was renamed throughout with no carry-over for old installs (there was no data to keep). The old name should not appear anywhere in the code. The local project folder is still `/home/richard/Projects/mediminder`.
+- The app was called Mediminder until 2026-11-12 and was renamed throughout with no carry-over for old installs (there was no data to keep). The old name should not appear anywhere in the code.
 - The git history starts on 2026-11-12 with one commit of the already-working app; there is nothing older to look up.

@@ -1,5 +1,11 @@
-export const MED_COLORS = ['blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red'] as const;
-export type MedColor = (typeof MED_COLORS)[number];
+export const MED_COLORS = ['blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red', 'teal', 'indigo', 'coral', 'lime', 'brown', 'gray'] as const;
+/** One of the named colors, or a color of the user's own as "#rrggbb". */
+export type MedColor = (typeof MED_COLORS)[number] | `#${string}`;
+
+export const isCustomColor = (color: string): color is `#${string}` => /^#[0-9a-f]{6}$/i.test(color);
+
+/** The CSS value to paint a medicine's color with. Named colors have a light and a dark shade; a custom one is used as is. */
+export const cssColor = (color: string) => (isCustomColor(color) ? color : `var(--med-${color})`);
 
 export const MED_FORMS = ['tablet', 'capsule', 'liquid', 'injection', 'inhaler', 'drops', 'cream', 'patch', 'other'] as const;
 export type MedForm = (typeof MED_FORMS)[number];

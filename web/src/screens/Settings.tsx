@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Bell, Download, KeyRound, LogOut, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Bell, Download, KeyRound, LogOut, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { Field, Sheet } from '../components/ui';
 import { ApiError, api } from '../lib/api';
 import { formatClock, today } from '../lib/dates';
 import { DEFAULT_QUESTIONS, customQuestions, defaultIsOn } from '../lib/journal';
+import { dosesCsv, importKindLabel, journalCsv, medicinesCsv, planImport, refillsCsv, type ImportPlan } from '../lib/transfer';
+import { EMPTY_STATE, type AppState } from '../lib/types';
 import { uid } from '../lib/logic';
 import { isNative, reminderPermission, requestReminderPermission, sendTestReminder, type ReminderPermission } from '../lib/reminders';
 import { dispatch, signOut, sync, updateSettings, useStore } from '../lib/store';
@@ -30,18 +32,34 @@ export function Settings() {
     void reminderPermission().then(setPermission);
   }, []);
 
-  const exportData = async () => {
+  const [plan, setPlan] = useState<ImportPlan | null>(null);
+
+  /** Saves a file to the computer. The data comes fresh from the server, with the whole history. */
+  const exportData = async (kind: 'backup' | 'medicines' | 'doses' | 'journal' | 'refills') => {
     setMessage('');
     try {
       const data = await api.exportAll(snap.serverUrl, snap.token!);
-      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      const state: AppState = { ...EMPTY_STATE, ...(data as Partial<AppState>) };
+      const csv = { medicines: medicinesCsv, doses: dosesCsv, journal: journalCsv, refills: refillsCsv };
+      const blob = kind === 'backup' ? new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }) : new Blob(['\uFEFF', csv[kind](state)], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `rxmindly-${today()}.json`;
+      link.download = kind === 'backup' ? `rxmindly-${today()}.json` : `rxmindly-${kind}-${today()}.csv`;
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Export failed');
+    }
+  };
+
+  const chooseImport = async (file: File | undefined) => {
+    setMessage('');
+    if (!file) return;
+    try {
+      setPlan(planImport(await file.text(), snap.state));
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'That file could not be read.');
     }
   };
 
@@ -113,16 +131,49 @@ export function Settings() {
       <JournalQuestions />
 
       <section className="card">
+        <h2 className="card-title">Your data</h2>
+        {!isNative && (
+          <>
+            <p className="muted card-sub">Save a copy to this computer. The CSV files open in any spreadsheet; the full backup holds everything in one file.</p>
+            <div className="export-grid">
+              <button className="btn" onClick={() => void exportData('medicines')}>
+                <Download size={18} /> Medicines
+              </button>
+              <button className="btn" onClick={() => void exportData('doses')}>
+                <Download size={18} /> Doses
+              </button>
+              <button className="btn" onClick={() => void exportData('journal')}>
+                <Download size={18} /> Journal
+              </button>
+              <button className="btn" onClick={() => void exportData('refills')}>
+                <Download size={18} /> Refills
+              </button>
+            </div>
+            <button className="btn block" onClick={() => void exportData('backup')}>
+              <Download size={18} /> Full backup
+            </button>
+          </>
+        )}
+        <label className="btn block file-btn">
+          <Upload size={18} /> Import a file
+          <input
+            type="file"
+            accept=".csv,.json,text/csv,application/json"
+            onChange={(e) => {
+              void chooseImport(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </label>
+        <p className="field-hint">Takes any of the files above: a medicines, dose, journal or refill CSV, or a full backup. You’ll see what it will do before anything changes.</p>
+      </section>
+
+      <section className="card">
         <h2 className="card-title">Account</h2>
         <div className="action-list">
           <button className="btn block" onClick={() => setChangingPassword(true)}>
             <KeyRound size={18} /> Change password
           </button>
-          {!isNative && (
-            <button className="btn block" onClick={() => void exportData()}>
-              <Download size={18} /> Download a backup
-            </button>
-          )}
           {!confirmSignOut ? (
             <button className="btn block" onClick={() => setConfirmSignOut(true)}>
               <LogOut size={18} /> Sign out
@@ -148,6 +199,44 @@ export function Settings() {
       </section>
 
       {message && <p className="note ok" role="status">{message}</p>}
+      {plan && (
+        <Sheet
+          title="Import this file?"
+          subtitle={importKindLabel(plan.kind)}
+          onClose={() => setPlan(null)}
+          footer={
+            <button
+              className="btn primary block"
+              disabled={!plan.ops.length}
+              onClick={() => {
+                dispatch(...plan.ops);
+                setPlan(null);
+                setMessage('Imported. It’s on this device now and is being saved to your server.');
+              }}
+            >
+              Import
+            </button>
+          }
+        >
+          {plan.summary.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+          {!plan.ops.length && <p>Nothing in this file can be imported.</p>}
+          {plan.problems.length > 0 && (
+            <div className="note warn">
+              <p>
+                {plan.problems.length} {plan.problems.length === 1 ? 'row' : 'rows'} will be left out:
+              </p>
+              <ul className="problem-list">
+                {plan.problems.slice(0, 8).map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+                {plan.problems.length > 8 && <li>…and {plan.problems.length - 8} more.</li>}
+              </ul>
+            </div>
+          )}
+        </Sheet>
+      )}
       {changingPassword && (
         <PasswordSheet
           onClose={() => setChangingPassword(false)}

@@ -6,7 +6,8 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const ID = /^[A-Za-z0-9_:-]{1,100}$/;
 const FORMS = ['tablet', 'capsule', 'liquid', 'injection', 'inhaler', 'drops', 'cream', 'patch', 'other'];
-const COLORS = ['blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red'];
+const COLORS = ['blue', 'orange', 'aqua', 'yellow', 'magenta', 'green', 'violet', 'red', 'teal', 'indigo', 'coral', 'lime', 'brown', 'gray'];
+const CUSTOM_COLOR = /^#[0-9a-f]{6}$/i;
 const ICONS = ['round', 'oval', 'caplet', 'capsule', 'softgel', 'liquid', 'drops', 'syringe', 'inhaler', 'tube', 'patch'];
 const HISTORY_DAYS = 190;
 
@@ -171,7 +172,7 @@ const handlers = {
     const name = text(m.name, 120);
     need(name, 'medication needs a name');
     const form = FORMS.includes(m.form) ? m.form : 'tablet';
-    const color = COLORS.includes(m.color) ? m.color : 'blue';
+    const color = COLORS.includes(m.color) ? m.color : typeof m.color === 'string' && CUSTOM_COLOR.test(m.color) ? m.color.toLowerCase() : 'blue';
     const icon = ICONS.includes(m.icon) ? m.icon : '';
     const stock = m.stock == null ? null : amount(m.stock, 'stock');
     const refillsLeft = m.refillsLeft == null ? null : Math.round(amount(m.refillsLeft, 'refills', { max: 999 }));

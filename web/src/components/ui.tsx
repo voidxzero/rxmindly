@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { iconOf } from '../lib/logic';
-import type { Med, MedColor, MedIcon } from '../lib/types';
+import { cssColor, type Med, type MedColor, type MedIcon } from '../lib/types';
 
 // ---------------------------------------------------------------------------
 // Back handling: the Android back button closes the topmost open sheet.
@@ -72,9 +72,9 @@ export function Bottle({ color, fill, size = 56 }: { color: MedColor; fill: numb
   const top = 22;
   const height = 38;
   const level = Math.max(0, Math.min(1, fill)) * height;
-  const clip = `bottle-${color}-${Math.round(fill * 100)}`;
+  const clip = `bottle-${color.replace('#', '')}-${Math.round(fill * 100)}`;
   return (
-    <svg className="bottle" width={size * 0.75} height={size} viewBox="0 0 48 64" style={{ color: `var(--med-${color})` }} aria-hidden="true">
+    <svg className="bottle" width={size * 0.75} height={size} viewBox="0 0 48 64" style={{ color: cssColor(color) }} aria-hidden="true">
       <defs>
         <clipPath id={clip}>
           <rect x="6" y={top - 4} width="36" height={height + 4} rx="7" />
@@ -189,7 +189,7 @@ function iconShape(icon: MedIcon, hollow: boolean) {
 /** The little picture of a medicine: its shape, in its bottle color. */
 export function PillMark({ med, hollow = false }: { med: Pick<Med, 'color' | 'form' | 'icon'>; hollow?: boolean }) {
   return (
-    <svg className={`pill-mark${hollow ? ' hollow' : ''}`} viewBox="0 0 24 24" style={{ color: `var(--med-${med.color})` }} aria-hidden="true">
+    <svg className={`pill-mark${hollow ? ' hollow' : ''}`} viewBox="0 0 24 24" style={{ color: cssColor(med.color) }} aria-hidden="true">
       {iconShape(iconOf(med), hollow)}
     </svg>
   );

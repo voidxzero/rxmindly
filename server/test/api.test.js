@@ -174,6 +174,12 @@ test('a medicine keeps its icon and follow-up doses', async () => {
   assert.equal(saved.icon, '');
   assert.deepEqual(saved.schedules[0].followUps, []);
 
+  // Colors: a named one, one of your own, or the default when it is neither.
+  for (const [given, kept] of [['teal', 'teal'], ['#A1B2C3', '#a1b2c3'], ['javascript:alert(1)', 'blue']]) {
+    res = await sync([{ type: 'med.put', med: { ...withFollowUps([]), color: given } }]);
+    assert.equal(res.json.state.meds.find((m) => m.id === 'med-fu').color, kept);
+  }
+
   await sync([{ type: 'med.delete', id: 'med-fu' }]);
 });
 

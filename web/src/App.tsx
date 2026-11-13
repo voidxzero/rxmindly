@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { App as NativeApp } from '@capacitor/app';
-import { ChartNoAxesColumn, CloudOff, LayoutGrid, NotebookPen, Pill, Settings as SettingsIcon } from 'lucide-react';
+import { ChartNoAxesColumn, CloudOff, LayoutGrid, NotebookPen, Pill, RefreshCw, Settings as SettingsIcon } from 'lucide-react';
 import { handleBack } from './components/ui';
 import { today } from './lib/dates';
 import { initReminders, isNative, requestReminderPermission } from './lib/reminders';
@@ -90,6 +90,36 @@ export function App() {
     return () => void listener.then((l) => l.remove());
   }, [tab]);
 
+  // Pulling down from the top of a screen syncs with the server.
+  const pullFrom = useRef<number | null>(null);
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const PULL_ENOUGH = 70;
+  const onPullStart = (e: React.TouchEvent) => {
+    const inSheet = (e.target as Element).closest?.('dialog');
+    pullFrom.current = window.scrollY <= 0 && e.touches.length === 1 && !inSheet && !refreshing ? e.touches[0].clientY : null;
+  };
+  const onPullMove = (e: React.TouchEvent) => {
+    if (pullFrom.current == null) return;
+    const down = e.touches[0].clientY - pullFrom.current;
+    // Scrolling back up, or the page moved: this isn't a pull any more.
+    if (down <= 0 || window.scrollY > 0) {
+      if (pull) setPull(0);
+      if (window.scrollY > 0) pullFrom.current = null;
+      return;
+    }
+    setPull(Math.min(110, down * 0.5));
+  };
+  const onPullEnd = () => {
+    if (pullFrom.current == null) return;
+    pullFrom.current = null;
+    if (pull >= PULL_ENOUGH) {
+      setRefreshing(true);
+      void sync().finally(() => setTimeout(() => setRefreshing(false), 400));
+    }
+    setPull(0);
+  };
+
   if (!signedIn) return <Login />;
 
   const summary = syncSummary(snap);
@@ -109,7 +139,12 @@ export function App() {
           </button>
         ))}
       </nav>
-      <main className="main">
+      {(pull > 8 || refreshing) && (
+        <div className={`pull${pull >= PULL_ENOUGH ? ' ready' : ''}${refreshing ? ' busy' : ''}`} style={{ transform: `translateY(${refreshing ? 24 : pull - 30}px)`, opacity: refreshing ? 1 : Math.min(1, pull / PULL_ENOUGH) }} aria-hidden="true">
+          <RefreshCw size={20} style={refreshing ? undefined : { transform: `rotate(${pull * 3}deg)` }} />
+        </div>
+      )}
+      <main className="main" onTouchStart={onPullStart} onTouchMove={onPullMove} onTouchEnd={onPullEnd} onTouchCancel={onPullEnd}>
         {trouble && (
           <button className="offline-bar" onClick={() => void sync()}>
             <CloudOff size={18} />

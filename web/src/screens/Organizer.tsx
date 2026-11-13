@@ -86,7 +86,7 @@ export function Organizer(props: { date: string; onDate: (date: string) => void;
           <p className="muted">{formatDate(week, { month: 'long', year: 'numeric' })}</p>
         </div>
         <div className="week-nav">
-          {!days.includes(t) && (
+          {date !== t && (
             <button className="btn small" onClick={() => go(t)}>
               Today
             </button>

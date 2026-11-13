@@ -4,7 +4,7 @@ import { Bottle, Field, ICON_LABELS, NumberInput, PillMark, Sheet, Stepper } fro
 import { DAY_LETTERS, DAY_NAMES, formatDate, today } from '../lib/dates';
 import { activeSchedules, defaultIcon, describeSchedule, formatQty, iconOf, indexDoses, reviseSchedules, supplyOf, uid, unitLabel, type Supply } from '../lib/logic';
 import { dispatch, useStore } from '../lib/store';
-import { MED_COLORS, MED_FORMS, MED_ICONS, type AppState, type FollowUp, type Med, type MedIcon, type Op, type Schedule } from '../lib/types';
+import { MED_COLORS, MED_FORMS, MED_ICONS, cssColor, isCustomColor, type AppState, type FollowUp, type Med, type MedIcon, type Op, type Schedule } from '../lib/types';
 
 type Open = { kind: 'detail'; id: string } | { kind: 'edit'; id: string | null } | { kind: 'refill'; id: string } | null;
 
@@ -434,10 +434,15 @@ function MedEditor({ med, state, onClose }: { med: Med | undefined; state: AppSt
               aria-checked={draft.color === c}
               aria-label={c}
               className={`swatch${draft.color === c ? ' selected' : ''}`}
-              style={{ background: `var(--med-${c})` }}
+              style={{ background: cssColor(c) }}
               onClick={() => patch({ color: c })}
             />
           ))}
+          {/* Any color you like: opens the phone's or browser's color picker. */}
+          <label className={`swatch custom${isCustomColor(draft.color) ? ' selected' : ''}`} style={isCustomColor(draft.color) ? { background: draft.color } : undefined} title="Pick your own color">
+            <input type="color" value={isCustomColor(draft.color) ? draft.color : '#888888'} onChange={(e) => patch({ color: e.target.value as Med['color'] })} aria-label="Pick your own color" />
+            {!isCustomColor(draft.color) && <Plus size={18} />}
+          </label>
         </div>
       </div>
 
