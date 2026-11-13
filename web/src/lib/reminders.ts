@@ -4,7 +4,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/local-notifications';
 import { addDays, dateTimeOf, formatTime, fromDateStr, today } from './dates';
-import { dueOn, groupByTime, indexDoses, supplyOf, unitLabel, type DueItem } from './logic';
+import { dueOn, indexDoses, supplyOf, unitLabel, type DueItem } from './logic';
 import { dispatch, getSnapshot, subscribe } from './store';
 import type { Dose } from './types';
 import { updateWidget } from './widget';
@@ -14,7 +14,8 @@ export const isNative = Capacitor.isNativePlatform();
 const CHANNEL = 'doses';
 const ACTION_TYPE = 'DOSE';
 const HORIZON_DAYS = 14;
-const MAX_NOTIFICATIONS = 200;
+// Android keeps at most 500 alarms per app; stay well under it. The soonest are kept.
+const MAX_NOTIFICATIONS = 400;
 const SNOOZE_MINUTES = 10;
 const LOW_STOCK_ID = 1;
 const TEST_ID = 2;
@@ -23,18 +24,29 @@ const SNOOZE_KEY = 'rxmindly.snoozes';
 type Kind = 0 | 1 | 2; // first reminder, follow-up, snooze
 
 interface Snooze {
-  date: string;
-  time: string;
+  doseId: string;
   at: number;
 }
 
 const FIRST_DOSE_ID = 1000;
 
-function notificationId(date: string, time: string, kind: Kind): number {
-  const day = Math.round((fromDateStr(date).getTime() - new Date(2024, 0, 1).getTime()) / 86400_000);
-  const [h, m] = time.split(':').map(Number);
-  return FIRST_DOSE_ID + (day % 100000) * 14400 + (h * 60 + m) * 10 + kind;
+/**
+ * Each dose gets its own notification, so its id comes from the dose id
+ * (a string) and the kind. Android wants a positive 32-bit int, so this is a
+ * hash (FNV-1a); with a few hundred live reminders a clash is vanishingly rare.
+ */
+function notificationId(doseId: string, kind: Kind): number {
+  let h = 0x811c9dc5;
+  for (const ch of `${doseId}|${kind}`) {
+    h ^= ch.codePointAt(0)!;
+    h = Math.imul(h, 0x01000193);
+  }
+  return FIRST_DOSE_ID + ((h >>> 0) % (0x7fffffff - FIRST_DOSE_ID));
 }
+
+/** Doses that still want a reminder: not yet recorded, and with a known time. */
+const pendingOn = (date: string, state = getSnapshot().state, doses = indexDoses(state)) =>
+  dueOn(state, date, doses).filter((item) => !item.dose && !item.estimated);
 
 /**
  * Takes dose reminders that no longer apply out of the notification shade:
@@ -49,11 +61,10 @@ async function clearStaleReminders() {
   const startOfToday = fromDateStr(start).getTime();
   const live = new Set<number>();
   for (const date of [addDays(start, -1), start]) {
-    for (const slot of groupByTime(dueOn(state, date, doses))) {
-      const pending = slot.items.filter((item) => !item.dose && !item.estimated);
+    for (const item of pendingOn(date, state, doses)) {
       // Yesterday's only still count if they came due after midnight (a late follow-up dose).
-      if (!pending.length || pending[0].at.getTime() < startOfToday) continue;
-      for (const kind of [0, 1, 2] as Kind[]) live.add(notificationId(date, slot.time, kind));
+      if (item.at.getTime() < startOfToday) continue;
+      for (const kind of [0, 1, 2] as Kind[]) live.add(notificationId(item.doseId, kind));
     }
   }
   const delivered = await LocalNotifications.getDeliveredNotifications();
@@ -63,19 +74,17 @@ async function clearStaleReminders() {
 
 const loadSnoozes = (): Snooze[] => {
   try {
-    return (JSON.parse(localStorage.getItem(SNOOZE_KEY) ?? '[]') as Snooze[]).filter((s) => s.at > Date.now());
+    return (JSON.parse(localStorage.getItem(SNOOZE_KEY) ?? '[]') as Snooze[]).filter((s) => s.doseId && s.at > Date.now());
   } catch {
     return [];
   }
 };
 const saveSnoozes = (list: Snooze[]) => localStorage.setItem(SNOOZE_KEY, JSON.stringify(list));
 
-function describe(items: DueItem[]) {
-  const lines = items.map((i) => `${i.med.name}${i.med.strength ? ` ${i.med.strength}` : ''} · ${unitLabel(i.med, i.qty)}`);
+function describe(item: DueItem) {
   return {
-    title: items.length === 1 ? `Time for ${items[0].med.name}` : `${items.length} medicines to take`,
-    body: items.length === 1 ? lines[0].split(' · ').slice(1).join(' · ') || lines[0] : lines.join(', '),
-    largeBody: lines.join('\n'),
+    title: `Time for ${item.med.name}`,
+    body: [item.med.strength, unitLabel(item.med, item.qty)].filter(Boolean).join(' · '),
   };
 }
 
@@ -87,38 +96,36 @@ function build(): LocalNotificationSchema[] {
   const snoozes = loadSnoozes();
   const out: LocalNotificationSchema[] = [];
 
-  const add = (date: string, time: string, kind: Kind, at: Date, items: DueItem[], prefix = '') => {
-    if (at.getTime() <= now || out.length >= MAX_NOTIFICATIONS) return;
-    const text = describe(items);
+  const add = (item: DueItem, kind: Kind, at: Date, prefix = '') => {
+    if (at.getTime() <= now) return;
+    const text = describe(item);
     out.push({
-      id: notificationId(date, time, kind),
+      id: notificationId(item.doseId, kind),
       title: prefix + text.title,
-      body: `${formatTime(time)} · ${text.body}`,
-      largeBody: text.largeBody,
-      summaryText: formatTime(time),
+      body: [formatTime(item.time), text.body].filter(Boolean).join(' · '),
+      summaryText: formatTime(item.time),
       schedule: { at, allowWhileIdle: true },
       channelId: CHANNEL,
       actionTypeId: ACTION_TYPE,
-      extra: { date, time },
+      extra: { date: item.date, doseId: item.doseId },
     });
   };
 
-  // Starts from yesterday: a follow-up dose to a late-evening dose can come due after midnight.
+  // One notification per dose. Starts from yesterday: a follow-up dose to a
+  // late-evening dose can come due after midnight. A follow-up dose gets its
+  // reminder once the dose before it is recorded and its time is known.
   for (let i = -1; i < HORIZON_DAYS; i++) {
-    const date = addDays(start, i);
-    for (const slot of groupByTime(dueOn(state, date, doses))) {
-      // A follow-up dose gets its reminder once the dose before it is recorded and its time is known.
-      const pending = slot.items.filter((item) => !item.dose && !item.estimated);
-      if (!pending.length) continue;
-      const due = pending[0].at;
-      add(date, slot.time, 0, due, pending);
+    for (const item of pendingOn(addDays(start, i), state, doses)) {
+      add(item, 0, item.at);
       if (settings.followUpMinutes > 0) {
-        add(date, slot.time, 1, new Date(due.getTime() + settings.followUpMinutes * 60_000), pending, 'Still waiting: ');
+        add(item, 1, new Date(item.at.getTime() + settings.followUpMinutes * 60_000), 'Still waiting: ');
       }
-      const snooze = snoozes.find((s) => s.date === date && s.time === slot.time);
-      if (snooze) add(date, slot.time, 2, new Date(snooze.at), pending);
+      const snooze = snoozes.find((s) => s.doseId === item.doseId);
+      if (snooze) add(item, 2, new Date(snooze.at));
     }
   }
+  out.sort((a, b) => a.schedule!.at!.getTime() - b.schedule!.at!.getTime());
+  out.splice(MAX_NOTIFICATIONS - 1); // leaves room for the low-stock reminder
 
   const low = state.meds.filter((m) => !m.archivedAt && supplyOf(m, state).level !== 'ok');
   if (low.length) {
@@ -165,24 +172,22 @@ async function reschedule() {
   if (notifications.length) await LocalNotifications.schedule({ notifications });
 }
 
-function takeSlot(date: string, time: string) {
-  const { state } = getSnapshot();
-  const items = dueOn(state, date, indexDoses(state)).filter((i) => i.time === time && !i.dose && !i.estimated);
-  dispatch(
-    ...items.map((item) => ({
-      type: 'dose.put' as const,
-      dose: {
-        id: item.doseId,
-        medId: item.med.id,
-        scheduleId: item.schedule.id,
-        date,
-        time,
-        status: 'taken',
-        qty: item.qty,
-        takenAt: new Date().toISOString(),
-      } satisfies Dose,
-    })),
-  );
+function takeDose(date: string, doseId: string) {
+  const item = pendingOn(date).find((i) => i.doseId === doseId);
+  if (!item) return; // already recorded
+  dispatch({
+    type: 'dose.put',
+    dose: {
+      id: item.doseId,
+      medId: item.med.id,
+      scheduleId: item.schedule.id,
+      date,
+      time: item.time,
+      status: 'taken',
+      qty: item.qty,
+      takenAt: new Date().toISOString(),
+    } satisfies Dose,
+  });
 }
 
 export async function initReminders(onOpenDay: (date: string) => void) {
@@ -200,21 +205,21 @@ export async function initReminders(onOpenDay: (date: string) => void) {
       {
         id: ACTION_TYPE,
         actions: [
-          { id: 'take', title: 'Mark all taken' },
+          { id: 'take', title: 'Mark taken' },
           { id: 'snooze', title: `Remind me in ${SNOOZE_MINUTES} min` },
         ],
       },
     ],
   });
   await LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
-    const { date, time } = (event.notification.extra ?? {}) as { date?: string; time?: string };
-    if (!date || !time) return;
-    if (event.actionId === 'take') {
-      takeSlot(date, time);
-    } else if (event.actionId === 'snooze') {
+    const { date, doseId } = (event.notification.extra ?? {}) as { date?: string; doseId?: string };
+    if (!date) return;
+    if (doseId && event.actionId === 'take') {
+      takeDose(date, doseId);
+    } else if (doseId && event.actionId === 'snooze') {
       saveSnoozes([
-        ...loadSnoozes().filter((s) => !(s.date === date && s.time === time)),
-        { date, time, at: Date.now() + SNOOZE_MINUTES * 60_000 },
+        ...loadSnoozes().filter((s) => s.doseId !== doseId),
+        { doseId, at: Date.now() + SNOOZE_MINUTES * 60_000 },
       ]);
       rescheduleReminders();
     }
