@@ -57,7 +57,7 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - The app version is `web/package.json` `version`; `build.gradle` derives `versionName` and `versionCode` from it. Never hand-edit those in Gradle.
 - A release is a tag `v<version>` with `rxmindly.apk` attached. Phones find it through the GitHub releases API (`UPDATE_REPO` in `updates.ts`) and install it over the top.
 - **Every APK must be signed with the same key** or Android refuses it as an update. The key is `~/.config/rxmindly/release.jks` with its password in `keystore.properties` beside it; the release workflow reads a copy from the repo's `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` secrets. Never commit it, never regenerate it, never print the password. Without the key the build falls back to the debug key, which is only good for a fresh install.
-- The repository is private, so the phone needs a GitHub access token (entered in Settings) to see releases.
+- The repository is public (since 2026-11-13), so the phone checks and downloads releases with no token. The access-token field in Settings exists only in case the repo is ever made private again.
 
 ## Deployment (the user's server)
 
