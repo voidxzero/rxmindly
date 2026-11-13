@@ -19,7 +19,12 @@ const STATUS_LABEL: Record<CellStatus, string> = {
 
 const percent = (n: number | null) => (n == null ? '—' : `${Math.round(n * 100)}%`);
 
+/** Shows "taken / doses that day" when some, but not all, of several doses are taken (today's too, as they're taken). */
+const showsCount = (cell: Cell) =>
+  cell.status === 'partial' || (cell.status === 'pending' && cell.taken > 0 && cell.items.length > 1);
+
 function Glyph({ cell }: { cell: Cell }) {
+  if (showsCount(cell)) return <span className="cell-count">{cell.taken}/{cell.items.length || cell.expected}</span>;
   switch (cell.status) {
     case 'taken':
       return <Check size={16} strokeWidth={3.5} />;
@@ -27,8 +32,6 @@ function Glyph({ cell }: { cell: Cell }) {
       return <X size={16} strokeWidth={3.5} />;
     case 'skipped':
       return <Minus size={16} strokeWidth={3.5} />;
-    case 'partial':
-      return <span className="cell-count">{cell.taken}/{cell.expected}</span>;
     case 'asNeeded':
       return <span className="cell-count">{cell.extra.length}</span>;
     default:
@@ -182,7 +185,7 @@ export function History() {
               {(['taken', 'partial', 'missed', 'skipped', 'pending'] as const).map((status) => (
                 <li key={status}>
                   <span className={`cell ${status}`} aria-hidden="true">
-                    <Glyph cell={{ date: '', status, expected: 2, taken: 1, skipped: 0, items: [], extra: [] }} />
+                    <Glyph cell={{ date: '', status, expected: 3, taken: 1, skipped: 0, items: [], extra: [] }} />
                   </span>
                   {STATUS_LABEL[status]}
                 </li>
@@ -259,14 +262,14 @@ function GridRow(props: { label: string; mark?: React.ReactNode; cells: Cell[]; 
       </th>
       {props.cells.map((cell) => {
         const label = `${props.label}, ${formatDate(cell.date, { weekday: 'short', month: 'short', day: 'numeric' })}: ${STATUS_LABEL[cell.status]}${
-          cell.expected > 1 ? ` (${cell.taken} of ${cell.expected})` : ''
+          cell.items.length > 1 ? ` (${cell.taken} of ${cell.items.length} taken)` : ''
         }`;
         return (
           <td key={cell.date} className={cell.date === props.today ? 'is-today' : ''}>
             {cell.status === 'none' ? (
               <span className="cell none" title={label} aria-label={label} />
             ) : (
-              <button className={`cell ${cell.status}`} title={label} aria-label={label} onClick={() => props.onPick(cell)}>
+              <button className={`cell ${cell.status}${showsCount(cell) ? ' has-count' : ''}`} title={label} aria-label={label} onClick={() => props.onPick(cell)}>
                 <Glyph cell={cell} />
               </button>
             )}

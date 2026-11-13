@@ -1365,6 +1365,13 @@ dialog.sheet::backdrop {
   transform: scale(0.6);
 }
 
+.cell.pending.has-count {
+  /* A day still going, with some doses taken: full size so the count is readable. */
+  color: var(--ink);
+  border-radius: 8px;
+  transform: none;
+}
+
 .cell.asNeeded {
   color: var(--ink);
   box-shadow: inset 0 0 0 1.5px var(--accent);
