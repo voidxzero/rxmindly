@@ -49,6 +49,7 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - **Dates and times are local strings**, `YYYY-MM-DD` and `HH:MM`, never UTC timestamps. Only `takenAt` is an ISO instant. The server does no time-zone maths.
 - **Schedules are ended, not rewritten.** Editing a time ends the old schedule (`endDate`) and starts a new one, so past days keep the schedule they had. See `reviseSchedules`.
 - **Every `/api` route except `status`, `setup` and `login` must call `authenticate`.** All queries filter by `user_id`.
+- **The phone can have two addresses for the same server**: `serverUrl` (main) and `backupUrl` (usually its home-network IP). Every request goes through `withServer()` in `store.ts`, which switches to the other address only when the one in use can't be reached (`ApiError` status 0), never on a 401 or other refusal. Before the token goes to the other address, its `/api/status` must report the same `instanceId` (a random id the server makes once, in the `meta` table), so a stranger's device at the same LAN IP on another network never receives it. Never call `api.*` with an address directly from a screen.
 - The Android app reaches the server through Capacitor's native HTTP (`CapacitorHttp` in `capacitor.config.ts`), so the server sends no CORS headers. Keep it that way.
 - Layout uses `--safe-area-inset-*` CSS variables that Capacitor injects on Android; keep `--safe-top` / `--safe-bottom` on anything pinned to a screen edge.
 
@@ -65,7 +66,7 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - Published on host port **8060** (container port stays 8080).
 - Data is a bind mount, `./data:/data`: the database is `data/rxmindly.db` beside the compose file. The folder must be owned by uid 1000, the container's user.
 - The project is copied to the server by hand over SFTP. Only `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `server/` and `web/` (without `node_modules`, `dist`, `android`) are needed there. Never copy over or delete the server's `data/` folder.
-- In the Android app the server address is entered at sign-in, e.g. `<server-ip>:8060`.
+- In the Android app the server address is entered at sign-in, e.g. `<server-ip>:8060`, with an optional local address used when the main one can't be reached. Both can be changed later in Settings → Your server (the local one without signing out).
 
 ## State of testing
 

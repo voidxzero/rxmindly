@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Field } from '../components/ui';
-import { ApiError, api, findServer, type ServerStatus } from '../lib/api';
+import { ApiError, api, cleanAddress, findServer, type ServerStatus } from '../lib/api';
 import { isNative } from '../lib/reminders';
 import { getSnapshot, signIn } from '../lib/store';
 
 export function Login() {
   // In the browser the server is wherever this page came from; the phone app has to be told.
   const [serverInput, setServerInput] = useState(getSnapshot().serverUrl);
-  const [server, setServer] = useState<{ url: string; status: ServerStatus } | null>(null);
+  const [backupInput, setBackupInput] = useState(getSnapshot().backupUrl);
+  const [server, setServer] = useState<{ url: string; status: ServerStatus; viaBackup: boolean } | null>(null);
   const [username, setUsername] = useState(getSnapshot().username);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -18,7 +19,16 @@ export function Login() {
     setBusy(true);
     setError('');
     try {
-      setServer(isNative ? await findServer(input) : { url: '', status: await api.status('') });
+      if (!isNative) setServer({ url: '', status: await api.status(''), viaBackup: false });
+      else {
+        try {
+          setServer({ ...(await findServer(input)), viaBackup: false });
+        } catch (err) {
+          // Away from home the local address won't answer, and at home the main one may not: try the other.
+          if (!backupInput.trim()) throw err;
+          setServer({ ...(await findServer(backupInput)), viaBackup: true });
+        }
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not reach the server');
     } finally {
@@ -42,7 +52,17 @@ export function Login() {
     setError('');
     try {
       const session = creating ? await api.setup(server.url, username.trim(), password) : await api.login(server.url, username.trim(), password);
-      await signIn(server.url, session);
+      await signIn(
+        isNative
+          ? {
+              serverUrl: server.viaBackup ? cleanAddress(serverInput) : server.url,
+              backupUrl: server.viaBackup ? server.url : cleanAddress(backupInput),
+              useBackup: server.viaBackup,
+              instanceId: server.status.instanceId ?? '',
+            }
+          : { serverUrl: '', backupUrl: '', useBackup: false, instanceId: server.status.instanceId ?? '' },
+        session,
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not sign in');
       setBusy(false);
@@ -60,6 +80,9 @@ export function Login() {
             <p className="muted">Enter the address of your Rxmindly server.</p>
             <Field label="Server address" hint="For example 192.168.1.20:8080 or meds.example.com">
               <input className="input" value={serverInput} onChange={(e) => setServerInput(e.target.value)} inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.1.20:8080" required />
+            </Field>
+            <Field label="Local address (optional)" hint="A second address for the same server, used when the main one can’t be reached. For example its address on your home Wi-Fi.">
+              <input className="input" value={backupInput} onChange={(e) => setBackupInput(e.target.value)} inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.1.20:8060" />
             </Field>
           </>
         )}

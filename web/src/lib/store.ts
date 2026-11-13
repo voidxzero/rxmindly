@@ -14,7 +14,14 @@ export interface Settings {
 export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error';
 
 export interface Snapshot {
+  /** The main server address. Usually one that works from anywhere. */
   serverUrl: string;
+  /** Optional second address for the same server, typically its home-network IP. Tried when the main one can't be reached. */
+  backupUrl: string;
+  /** True when the backup address is the one that worked last, so it is tried first. */
+  useBackup: boolean;
+  /** The server's own id (from /api/status). The token is only ever sent to an address that reports this same id. */
+  instanceId: string;
   token: string | null;
   username: string;
   /** Server data with any not-yet-synced changes already applied. */
@@ -49,6 +56,9 @@ const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, githu
 function load(): Snapshot {
   const base: Snapshot = {
     serverUrl: '',
+    backupUrl: '',
+    useBackup: false,
+    instanceId: '',
     token: null,
     username: '',
     state: EMPTY_STATE,
@@ -129,14 +139,88 @@ export function sync(): Promise<void> {
   return syncing;
 }
 
+// ---------------------------------------------------------------------------
+// Which address to use
+
+const PROBE_MS = 4000;
+const hasScheme = (url: string) => /^https?:\/\//i.test(url);
+
+/** The address requests go to right now. */
+export const activeUrl = (s: Snapshot = snapshot) => (s.useBackup && s.backupUrl ? s.backupUrl : s.serverUrl);
+const otherUrl = (s: Snapshot) => (!s.backupUrl ? '' : s.useBackup ? s.serverUrl : s.backupUrl);
+
+/**
+ * Checks that an address leads to this same server, and returns it with its
+ * scheme worked out. Returns null for anything else: an unknown id, an older
+ * server that doesn't report one, or nothing answering. This is what keeps the
+ * token from going to a stranger's device that happens to have the home
+ * network's IP on some other Wi-Fi.
+ */
+async function sameServer(address: string): Promise<string | null> {
+  const id = snapshot.instanceId;
+  if (!id || !address) return null;
+  const candidates = hasScheme(address) ? [address] : [`https://${address}`, `http://${address}`];
+  for (const url of candidates) {
+    try {
+      const status = await api.status(url, PROBE_MS);
+      if (status.app === 'rxmindly' && status.instanceId === id) return url;
+    } catch {
+      /* try the next one */
+    }
+  }
+  return null;
+}
+
+/**
+ * Runs a request against the server, falling back to the other address when the
+ * one in use can't be reached at all. Only "can't reach it" switches: a refusal
+ * such as an expired sign-in comes from the real server and is passed on as is.
+ */
+export async function withServer<T>(call: (url: string) => Promise<T>): Promise<T> {
+  const before = snapshot;
+  try {
+    const result = await call(activeUrl(before));
+    if (!snapshot.instanceId && !before.useBackup) void learnInstanceId(before.serverUrl);
+    return result;
+  } catch (err) {
+    const other = otherUrl(before);
+    if (!other || !(err instanceof ApiError && err.status === 0)) throw err;
+    const url = await sameServer(other);
+    if (!url) throw err;
+    const result = await call(url);
+    // Remember which one works, with its scheme filled in.
+    const toBackup = other === before.backupUrl;
+    set(toBackup ? { useBackup: true, backupUrl: url } : { useBackup: false, serverUrl: url });
+    return result;
+  }
+}
+
+/**
+ * Accounts signed in before servers had an id learn it from the main address,
+ * the one the user signed in through, so the backup address can be used later.
+ */
+async function learnInstanceId(url: string) {
+  try {
+    const status = await api.status(url, PROBE_MS);
+    if (status.app === 'rxmindly' && status.instanceId && snapshot.serverUrl === url && !snapshot.instanceId) set({ instanceId: status.instanceId });
+  } catch {
+    /* next time */
+  }
+}
+
+/** Sets or clears the backup address from Settings, without signing out. */
+export function setBackupUrl(address: string) {
+  set({ backupUrl: address.trim().replace(/\/+$/, ''), useBackup: false });
+}
+
 async function runSync() {
-  const { serverUrl, token } = snapshot;
+  const { token } = snapshot;
   if (!token) return;
   // A big import goes up in batches the server will accept.
   const sending = firstBatch(snapshot.outbox);
   set({ syncStatus: 'syncing' });
   try {
-    const result = await api.sync(serverUrl, token, sending);
+    const result = await withServer((url) => api.sync(url, token, sending));
     if (snapshot.token !== token) return; // signed out while this was in flight
     // Anything queued while the request was in flight is replayed on top of the fresh copy.
     const remaining = snapshot.outbox.slice(sending.length);
@@ -174,11 +258,23 @@ export function dispatch(...ops: Op[]) {
   syncSoon();
 }
 
-export function signIn(serverUrl: string, session: Session) {
-  const sameAccount =
-    snapshot.serverUrl === serverUrl && snapshot.username.toLowerCase() === session.username.toLowerCase();
+export interface SignInPlace {
+  /** The main address, as entered or with its scheme worked out. */
+  serverUrl: string;
+  backupUrl: string;
+  /** True when sign-in went through the backup address. */
+  useBackup: boolean;
+  instanceId: string;
+}
+
+export function signIn(place: SignInPlace, session: Session) {
+  const sameServerAsBefore =
+    place.instanceId && snapshot.instanceId
+      ? place.instanceId === snapshot.instanceId
+      : [snapshot.serverUrl, snapshot.backupUrl].filter(Boolean).includes(place.useBackup ? place.backupUrl : place.serverUrl);
+  const sameAccount = sameServerAsBefore && snapshot.username.toLowerCase() === session.username.toLowerCase();
   set({
-    serverUrl,
+    ...place,
     token: session.token,
     username: session.username,
     // A different account must never inherit this device's cached data or queue.
@@ -188,9 +284,10 @@ export function signIn(serverUrl: string, session: Session) {
 }
 
 export async function signOut() {
-  const { serverUrl, token } = snapshot;
+  const url = activeUrl();
+  const { token } = snapshot;
   set({ token: null, username: '', state: EMPTY_STATE, outbox: [], loaded: false, lastSyncAt: null, syncStatus: 'idle', syncError: null });
-  if (token) await api.logout(serverUrl, token).catch(() => {});
+  if (token) await api.logout(url, token).catch(() => {});
 }
 
 export function updateSettings(patch: Partial<Settings>) {

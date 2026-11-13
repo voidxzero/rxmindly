@@ -41,7 +41,7 @@ If the server is reachable from outside your home network, put it behind HTTPS (
 adb install -r rxmindly.apk  # or copy the file to your phone and open it
 ```
 
-On first launch, enter your server's address (for example `192.168.1.20:8060`), then sign in. Allow notifications when asked.
+On first launch, enter your server's address (for example `meds.example.com` or `192.168.1.20:8060`), then sign in. If the server has a second address, such as its IP on your home Wi-Fi, add it as the local address: the app switches to it whenever the main one can't be reached. Allow notifications when asked.
 
 The phone keeps its own copy of your data. You can take doses and get reminders anywhere; changes are sent to the server the next time it's reachable.
 

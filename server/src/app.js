@@ -88,6 +88,7 @@ export function createApp({ dbPath, staticDir, allowSignup = false, trustProxy =
   const staticRoot = staticDir ? resolve(staticDir) : null;
 
   const userCount = () => db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+  const instanceId = db.prepare("SELECT value FROM meta WHERE key = 'instance_id'").get().value;
 
   const clientAddress = (req) => {
     if (trustProxy) {
@@ -108,7 +109,7 @@ export function createApp({ dbPath, staticDir, allowSignup = false, trustProxy =
   const routes = {
     'GET /api/status': () => {
       const users = userCount();
-      return { app: 'rxmindly', version: VERSION, setupRequired: users === 0, signupAllowed: users === 0 || allowSignup };
+      return { app: 'rxmindly', version: VERSION, instanceId, setupRequired: users === 0, signupAllowed: users === 0 || allowSignup };
     },
 
     // Creates the first account. Closed afterwards unless signup is enabled.

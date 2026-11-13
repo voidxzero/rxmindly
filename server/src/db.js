@@ -97,6 +97,15 @@ const MIGRATIONS = [
     PRIMARY KEY (user_id, date)
   );
   `,
+  `
+  -- A random id for this server, so the phone can tell its main and local
+  -- addresses lead to the same server before it sends a sign-in token to either.
+  CREATE TABLE meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  INSERT INTO meta (key, value) VALUES ('instance_id', lower(hex(randomblob(16))));
+  `,
 ];
 
 export function openDb(path) {

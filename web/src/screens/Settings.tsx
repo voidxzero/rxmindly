@@ -10,7 +10,7 @@ import { EMPTY_STATE, type AppState } from '../lib/types';
 import { UPDATE_REPO, checkForUpdate, installUpdate, updateAvailable, useUpdates } from '../lib/updates';
 import { uid } from '../lib/logic';
 import { isNative, reminderPermission, requestReminderPermission, sendTestReminder, type ReminderPermission } from '../lib/reminders';
-import { dispatch, signOut, sync, updateSettings, useStore } from '../lib/store';
+import { activeUrl, dispatch, setBackupUrl, signOut, sync, updateSettings, useStore, withServer } from '../lib/store';
 
 export function syncSummary(snap: ReturnType<typeof useStore>): { text: string; tone: 'ok' | 'warn' } {
   const waiting = snap.outbox.length;
@@ -40,7 +40,7 @@ export function Settings() {
   const exportData = async (kind: 'backup' | 'medicines' | 'doses' | 'journal' | 'refills') => {
     setMessage('');
     try {
-      const data = await api.exportAll(snap.serverUrl, snap.token!);
+      const data = await withServer((url) => api.exportAll(url, snap.token!));
       const state: AppState = { ...EMPTY_STATE, ...(data as Partial<AppState>) };
       const csv = { medicines: medicinesCsv, doses: dosesCsv, journal: journalCsv, refills: refillsCsv };
       const saved =
@@ -75,7 +75,7 @@ export function Settings() {
 
       <section className="card">
         <h2 className="card-title">Your server</h2>
-        {isNative && <p className="muted card-sub">{snap.serverUrl}</p>}
+        {isNative && <ServerAddresses />}
         <p className={`note ${summary.tone}`}>{summary.text}</p>
         <button className="btn" onClick={() => void sync()} disabled={snap.syncStatus === 'syncing'}>
           <RefreshCw size={18} /> Sync now
@@ -139,24 +139,24 @@ export function Settings() {
             <p className="muted card-sub">Save a copy to this {isNative ? 'phone' : 'computer'}. The CSV files open in any spreadsheet; the full backup holds everything in one file.</p>
             <div className="export-grid">
               <button className="btn" onClick={() => void exportData('medicines')}>
-                <Download size={18} /> Medicines
+                <Upload size={18} /> Medicines
               </button>
               <button className="btn" onClick={() => void exportData('doses')}>
-                <Download size={18} /> Doses
+                <Upload size={18} /> Doses
               </button>
               <button className="btn" onClick={() => void exportData('journal')}>
-                <Download size={18} /> Journal
+                <Upload size={18} /> Journal
               </button>
               <button className="btn" onClick={() => void exportData('refills')}>
-                <Download size={18} /> Refills
+                <Upload size={18} /> Refills
               </button>
             </div>
             <button className="btn block" onClick={() => void exportData('backup')}>
-              <Download size={18} /> Full backup
+              <Upload size={18} /> Full backup
             </button>
         </>
         <label className="btn block file-btn">
-          <Upload size={18} /> Import a file
+          <Download size={18} /> Import a file
           <input
             type="file"
             accept=".csv,.json,text/csv,application/json"
@@ -251,6 +251,44 @@ export function Settings() {
   );
 }
 
+/** Android only: the main address, the optional local one, and which is in use. */
+function ServerAddresses() {
+  const snap = useStore();
+  const [backup, setBackup] = useState(snap.backupUrl);
+  const inUse = activeUrl(snap);
+  const changed = backup.trim().replace(/\/+$/, '') !== snap.backupUrl;
+  return (
+    <>
+      <dl className="facts">
+        <div>
+          <dt>Main address</dt>
+          <dd>
+            {snap.serverUrl}
+            {snap.backupUrl && inUse === snap.serverUrl && <span className="muted"> · in use</span>}
+          </dd>
+        </div>
+        {snap.backupUrl && (
+          <div>
+            <dt>Local address</dt>
+            <dd>
+              {snap.backupUrl}
+              {inUse === snap.backupUrl && <span className="muted"> · in use</span>}
+            </dd>
+          </div>
+        )}
+      </dl>
+      <Field label="Local address (optional)" hint="Used when the main address can’t be reached, such as your server’s address on your home Wi-Fi.">
+        <div className="add-question">
+          <input className="input" value={backup} onChange={(e) => setBackup(e.target.value)} inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.1.20:8060" />
+          <button className="btn" disabled={!changed} onClick={() => setBackupUrl(backup)}>
+            {backup.trim() ? 'Save' : 'Remove'}
+          </button>
+        </div>
+      </Field>
+    </>
+  );
+}
+
 /** Android only: the installed version, whether GitHub has a newer one, and the button that installs it. */
 function AppUpdates() {
   const snap = useStore();
@@ -339,7 +377,7 @@ function PasswordSheet({ onClose, onDone }: { onClose: () => void; onDone: () =>
     setBusy(true);
     setError('');
     try {
-      await api.changePassword(snap.serverUrl, snap.token!, current, next);
+      await withServer((url) => api.changePassword(url, snap.token!, current, next));
       onDone();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not change the password');

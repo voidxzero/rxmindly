@@ -304,6 +304,19 @@ test('repeated wrong passwords get locked out', async () => {
   assert.equal(last.status, 429);
 });
 
+test('the server keeps the same instance id across restarts', async () => {
+  const first = (await call('GET', '/api/status')).json.instanceId;
+  assert.match(first, /^[0-9a-f]{32}$/);
+  const { openDb } = await import('../src/db.js');
+  const again = openDb(join(dir, 'reopen.db'));
+  const id = again.prepare("SELECT value FROM meta WHERE key = 'instance_id'").get().value;
+  again.close();
+  const reopened = openDb(join(dir, 'reopen.db'));
+  assert.equal(reopened.prepare("SELECT value FROM meta WHERE key = 'instance_id'").get().value, id);
+  reopened.close();
+  assert.notEqual(id, first);
+});
+
 test('static files are served without escaping the web folder', async () => {
   const shell = await fetch(`${base}/cabinet`);
   assert.equal(shell.status, 200);
