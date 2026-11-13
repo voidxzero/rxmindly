@@ -16,11 +16,13 @@ Self-hosted prescription tracker and medicine reminder. Three parts: a server in
   - `src/lib/reminders.ts` Android local notifications (no-op in a browser)
   - `src/lib/transfer.ts`, `csv.ts` import and export: CSV per kind of data, and the JSON backup
   - `src/lib/widget.ts` hands the Android home screen widget its data
-  - `android/app/src/main/java/app/rxmindly/` hand-written native code: `NextDoseWidget` (the widget) and `WidgetBridgePlugin` (how the web side reaches it)
+  - `src/lib/updates.ts` Android self-update from GitHub releases (checks when the app comes into view; no timer)
+  - `android/app/src/main/java/app/rxmindly/` hand-written native code: `NextDoseWidget` (the widget), `WidgetBridgePlugin` (how the web side reaches it) and `UpdaterPlugin` (downloads and installs an update)
   - `src/screens/` Organizer, Cabinet, Journal, History, Settings, Login
   - `android/` Capacitor project. `android/app/src/main/assets/public` is generated; never edit it.
 - `Dockerfile`, `docker-compose.yml` — one image: builds `web/`, serves it from the server.
-- `build-apk.sh` — builds `rxmindly.apk` at the project root.
+- `build-apk.sh` — builds `rxmindly.apk` (release build, signed) at the project root.
+- `release.sh <version>` — bumps the version, tags and pushes; `.github/workflows/release.yml` then builds the APK and publishes a GitHub release.
 
 ## Commands
 
@@ -49,6 +51,13 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 - **Every `/api` route except `status`, `setup` and `login` must call `authenticate`.** All queries filter by `user_id`.
 - The Android app reaches the server through Capacitor's native HTTP (`CapacitorHttp` in `capacitor.config.ts`), so the server sends no CORS headers. Keep it that way.
 - Layout uses `--safe-area-inset-*` CSS variables that Capacitor injects on Android; keep `--safe-top` / `--safe-bottom` on anything pinned to a screen edge.
+
+## Releases and the signing key
+
+- The app version is `web/package.json` `version`; `build.gradle` derives `versionName` and `versionCode` from it. Never hand-edit those in Gradle.
+- A release is a tag `v<version>` with `rxmindly.apk` attached. Phones find it through the GitHub releases API (`UPDATE_REPO` in `updates.ts`) and install it over the top.
+- **Every APK must be signed with the same key** or Android refuses it as an update. The key is `~/.config/rxmindly/release.jks` with its password in `keystore.properties` beside it; the release workflow reads a copy from the repo's `KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` secrets. Never commit it, never regenerate it, never print the password. Without the key the build falls back to the debug key, which is only good for a fresh install.
+- The repository is private, so the phone needs a GitHub access token (entered in Settings) to see releases.
 
 ## Deployment (the user's server)
 

@@ -12,6 +12,6 @@ echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 [ -d node_modules ] || npm ci
 npm run build
 npx cap sync android
-(cd android && ./gradlew assembleDebug --console=plain -q)
-cp android/app/build/outputs/apk/debug/app-debug.apk ../rxmindly.apk
+(cd android && ./gradlew assembleRelease --console=plain -q)
+cp android/app/build/outputs/apk/release/app-release.apk ../rxmindly.apk
 echo "Built $(cd .. && pwd)/rxmindly.apk"

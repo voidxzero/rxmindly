@@ -238,3 +238,13 @@ describe('journal', () => {
     expect(s.questions.length).toBe(2);
   });
 });
+
+describe('app updates', () => {
+  test('versions are compared number by number', async () => {
+    const { isNewer } = await import('./updates');
+    expect(isNewer('1.10.0', '1.9.3')).toBe(true);
+    expect(isNewer('v1.2.0', '1.2.0')).toBe(false);
+    expect(isNewer('1.1.9', '1.2.0')).toBe(false);
+    expect(isNewer('2.0', '1.99.99')).toBe(true);
+  });
+});

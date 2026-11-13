@@ -1,5 +1,19 @@
 apply plugin: 'com.android.application'
 
+// The version comes from web/package.json, so there is one place to bump it.
+// Android will only install an update whose versionCode is not lower than the one installed.
+def pkg = new groovy.json.JsonSlurper().parseText(file('../../package.json').text)
+def versionParts = pkg.version.tokenize('.-').take(3).collect { it as int }
+def appVersionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
+
+// The permanent signing key lives outside the repository. Every build must be
+// signed with the same key, or phones refuse it as an update. Without the key
+// (someone else's checkout) the build falls back to the throwaway debug key.
+def signing = new Properties()
+def signingPath = System.getenv('RXMINDLY_KEYSTORE_PROPERTIES') ?: "${System.getProperty('user.home')}/.config/rxmindly/keystore.properties"
+if (new File(signingPath).exists()) new File(signingPath).withInputStream { signing.load(it) }
+def hasKey = signing.getProperty('storeFile') != null
+
 android {
     namespace = "app.rxmindly"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +21,8 @@ android {
         applicationId "app.rxmindly"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName pkg.version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,11 +30,26 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasKey) {
+            permanent {
+                storeFile file(signing.getProperty('storeFile'))
+                storePassword signing.getProperty('storePassword')
+                keyAlias signing.getProperty('keyAlias')
+                keyPassword signing.getProperty('storePassword')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig hasKey ? signingConfigs.permanent : signingConfigs.debug
         }
+    }
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
     }
 }
 

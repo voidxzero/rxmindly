@@ -1972,3 +1972,10 @@ textarea {
   padding-left: 20px;
   font-size: 0.9rem;
 }
+
+/* ---------- App update notice ---------- */
+
+.offline-bar.update-bar {
+  background: var(--accent-soft);
+  color: var(--ink);
+}

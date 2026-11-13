@@ -6,6 +6,7 @@ import { formatClock, today } from '../lib/dates';
 import { DEFAULT_QUESTIONS, customQuestions, defaultIsOn } from '../lib/journal';
 import { dosesCsv, importKindLabel, journalCsv, medicinesCsv, planImport, refillsCsv, type ImportPlan } from '../lib/transfer';
 import { EMPTY_STATE, type AppState } from '../lib/types';
+import { UPDATE_REPO, checkForUpdate, installUpdate, updateAvailable, useUpdates } from '../lib/updates';
 import { uid } from '../lib/logic';
 import { isNative, reminderPermission, requestReminderPermission, sendTestReminder, type ReminderPermission } from '../lib/reminders';
 import { dispatch, signOut, sync, updateSettings, useStore } from '../lib/store';
@@ -130,6 +131,8 @@ export function Settings() {
 
       <JournalQuestions />
 
+      {isNative && <AppUpdates />}
+
       <section className="card">
         <h2 className="card-title">Your data</h2>
         {!isNative && (
@@ -247,6 +250,37 @@ export function Settings() {
         />
       )}
     </div>
+  );
+}
+
+/** Android only: the installed version, whether GitHub has a newer one, and the button that installs it. */
+function AppUpdates() {
+  const snap = useStore();
+  const updates = useUpdates();
+  const available = updateAvailable(updates);
+  const busy = updates.status !== 'idle';
+  return (
+    <section className="card">
+      <h2 className="card-title">App updates</h2>
+      <p className="muted card-sub">
+        {updates.current ? `You have version ${updates.current}.` : 'Checking which version you have…'}{' '}
+        {available ? `Version ${updates.latest} is available.` : updates.latest && !updates.error ? 'That’s the latest.' : ''}
+      </p>
+      {updates.error && <p className="note warn">{updates.error}</p>}
+      {updates.askedPermission && <p className="note ok">Allow Rxmindly to install updates on the screen that just opened, come back, and tap the button again.</p>}
+      {available && (
+        <button className="btn primary block" onClick={() => void installUpdate()} disabled={busy}>
+          <Download size={18} />
+          {updates.status === 'downloading' ? (updates.progress != null ? `Downloading… ${Math.round(updates.progress * 100)}%` : 'Downloading…') : `Update to ${updates.latest}`}
+        </button>
+      )}
+      <button className="btn block" onClick={() => void checkForUpdate(true)} disabled={busy}>
+        <RefreshCw size={18} /> {updates.status === 'checking' ? 'Checking…' : 'Check for updates'}
+      </button>
+      <Field label="GitHub access token" hint={`Only needed if the ${UPDATE_REPO} repository is private. It stays on this phone.`}>
+        <input className="input" type="password" autoComplete="off" value={snap.settings.githubToken} onChange={(e) => updateSettings({ githubToken: e.target.value })} placeholder="Leave empty for a public repository" />
+      </Field>
+    </section>
   );
 }
 

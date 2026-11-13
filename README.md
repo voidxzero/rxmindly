@@ -7,6 +7,7 @@ Keep track of your prescriptions and get reminded to take them. Your data lives 
 - **Journal** – a few 1-to-5 questions about your day (mood, energy, sleep, calm, plus any you add in Settings) and a free-text note, with a chart of each question over time.
 - **Import and export** – medicines, dose history, journal and refills as CSV files for a spreadsheet, or everything as one backup file. Any of them can be imported again.
 - **Home screen widget** (Android) – shows what is overdue or when the next dose is.
+- **Updates itself** (Android) – checks GitHub for a newer release when you open the app and installs it with a tap.
 - **History** – a day-by-day grid of what was taken, missed or skipped, plus totals per medicine and per time of day.
 - **Reminders** – from the Android app, at each scheduled time, with a follow-up if you haven't taken it. They work with no connection to the server.
 - **Follow-up doses** – for medicines taken again a set time later (say, every 4 hours): the next reminder is timed from when you marked the dose before as taken. If you forgot to mark a dose, you can set the time you really took it.

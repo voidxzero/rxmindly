@@ -54,4 +54,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Medicine reminders must fire at the scheduled minute. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- The app updates itself from its GitHub releases. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

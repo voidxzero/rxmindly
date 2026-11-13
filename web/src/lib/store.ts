@@ -7,6 +7,8 @@ export interface Settings {
   reminders: boolean;
   /** Minutes before a second nudge for pills still not taken; 0 turns it off. */
   followUpMinutes: number;
+  /** Only needed to update the Android app when its GitHub repository is private. Kept on this device. */
+  githubToken: string;
 }
 
 export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error';
@@ -42,7 +44,7 @@ function firstBatch(outbox: Op[]): Op[] {
   }
   return outbox.slice(0, n);
 }
-const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30 };
+const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, githubToken: '' };
 
 function load(): Snapshot {
   const base: Snapshot = {

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { App as NativeApp } from '@capacitor/app';
-import { ChartNoAxesColumn, CloudOff, LayoutGrid, NotebookPen, Pill, RefreshCw, Settings as SettingsIcon } from 'lucide-react';
+import { ChartNoAxesColumn, CloudOff, Download, LayoutGrid, NotebookPen, Pill, RefreshCw, Settings as SettingsIcon } from 'lucide-react';
 import { handleBack } from './components/ui';
 import { today } from './lib/dates';
 import { initReminders, isNative, requestReminderPermission } from './lib/reminders';
 import { sync, useStore } from './lib/store';
+import { initUpdates, updateAvailable, useUpdates } from './lib/updates';
 import { Cabinet } from './screens/Cabinet';
 import { History } from './screens/History';
 import { Journal } from './screens/Journal';
@@ -25,9 +26,11 @@ const TABS: { id: Tab; label: string; icon: typeof Pill }[] = [
 // Set by a tapped reminder before React is listening.
 let openDay: (date: string) => void = () => {};
 void initReminders((date) => openDay(date));
+initUpdates();
 
 export function App() {
   const snap = useStore();
+  const updates = useUpdates();
   const [tab, setTab] = useState<Tab>('organizer');
   const [date, setDate] = useState(today());
   const [addNew, setAddNew] = useState(false);
@@ -149,6 +152,12 @@ export function App() {
           <button className="offline-bar" onClick={() => void sync()}>
             <CloudOff size={18} />
             <span>{summary.text} Tap to retry.</span>
+          </button>
+        )}
+        {updateAvailable(updates) && tab !== 'settings' && (
+          <button className="offline-bar update-bar" onClick={() => setTab('settings')}>
+            <Download size={18} />
+            <span>Version {updates.latest} of Rxmindly is ready. Tap to update.</span>
           </button>
         )}
         {!snap.loaded && snap.syncStatus === 'syncing' ? (

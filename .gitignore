@@ -13,3 +13,7 @@ web/android/app/src/main/assets/capacitor.config.json
 web/android/app/src/main/assets/capacitor.plugins.json
 web/android/capacitor-cordova-android-plugins/
 *.apk
+
+# Signing keys never belong in the repository.
+*.jks
+keystore.properties
