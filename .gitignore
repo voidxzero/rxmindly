@@ -17,3 +17,4 @@ web/android/capacitor-cordova-android-plugins/
 # Signing keys never belong in the repository.
 *.jks
 keystore.properties
+shots/

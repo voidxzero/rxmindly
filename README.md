@@ -2,6 +2,17 @@
 
 Keep track of your prescriptions and get reminded to take them. Your data lives on your own server.
 
+<p>
+  <img src="docs/screenshots/android-organizer.png" width="24%" alt="Pill organizer on Android: a week of compartments and today's doses, three of five taken">
+  <img src="docs/screenshots/android-cabinet.png" width="24%" alt="Medicine cabinet on Android: each prescription as a bottle with tablets and refills left">
+  <img src="docs/screenshots/android-journal.png" width="24%" alt="Journal on Android: a chart of mood, energy, sleep and calm over 30 days">
+  <img src="docs/screenshots/android-history.png" width="24%" alt="History on Android: doses taken, streak, and a day-by-day grid per medicine">
+</p>
+<p>
+  <img src="docs/screenshots/web-organizer.png" width="49%" alt="The web app's pill organizer on a desktop screen">
+  <img src="docs/screenshots/web-history-dark.png" width="49%" alt="The web app's history page in dark mode">
+</p>
+
 - **Pill organizer** – a week of compartments. Open a day, tap **Take**.
 - **Medicine cabinet** – every prescription as a bottle: how much is left, how many days that lasts, refills remaining, one-tap refill.
 - **Journal** – a few 1-to-5 questions about your day (mood, energy, sleep, calm, plus any you add in Settings) and a free-text note, with a chart of each question over time.
@@ -55,6 +66,9 @@ cd web && npm install && npm run dev   # web app with live reload, proxies /api 
 
 cd server && npm test           # API tests
 cd web && npm test              # schedule, pill-count and history logic tests
+
+./emu.sh start && ./emu.sh install   # run the APK in the Android emulator (./emu.sh lists the commands)
+node server/demo-data.js http://localhost:8080 demo demo-password   # made-up data for trying things out
 ```
 
 Layout:
