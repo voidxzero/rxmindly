@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { patterns } from './haptics';
+import { patterns, type Pattern } from './haptics';
 
 describe('haptic patterns', () => {
-  for (const [name, p] of Object.entries(patterns)) {
+  for (const [name, p] of Object.entries(patterns as Record<string, Pattern>)) {
     it(`${name} is something the phone can play`, () => {
       // Waveform: off/on pairs, a strength for each, all in range.
       expect(p.timings.length).toBe(p.amplitudes.length);
