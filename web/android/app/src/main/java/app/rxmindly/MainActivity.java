@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WidgetBridgePlugin.class);
         registerPlugin(UpdaterPlugin.class);
         registerPlugin(FileSaverPlugin.class);
+        registerPlugin(HapticsPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

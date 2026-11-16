@@ -3,6 +3,7 @@
 // Journal and by the preview in Settings.
 
 import { useEffect, useRef, useState } from 'react';
+import { haptics } from '../lib/haptics';
 import { fromScale, toScale, type Question } from '../lib/journal';
 
 interface Props {
@@ -80,6 +81,9 @@ function SliderInput({ question: q, value, max, numbered, locked, onAnswer }: Pr
   };
   useEffect(() => () => commit(), []); // eslint-disable-line react-hooks/exhaustive-deps
   const move = (stored: number) => {
+    // A soft tick at each whole number the thumb passes, firmer toward the top.
+    const n = Math.round(toScale(stored, max));
+    if (n !== Math.round(toScale(pos, max))) haptics.detent((n - 1) / Math.max(1, max - 1));
     setPos(stored);
     pending.current = stored;
     clearTimeout(timer.current);

@@ -6,6 +6,7 @@ import { ApiError, api } from '../lib/api';
 import { formatClock, today } from '../lib/dates';
 import { DEFAULT_QUESTIONS, SCALE_SIZES, customQuestions, defaultIsOn } from '../lib/journal';
 import { dosesCsv, importKindLabel, journalCsv, medicinesCsv, planImport, refillsCsv, type ImportPlan } from '../lib/transfer';
+import { haptics } from '../lib/haptics';
 import { saveFile } from '../lib/save-file';
 import { EMPTY_STATE, type AppState } from '../lib/types';
 import { checkForUpdate, installUpdate, updateAvailable, useUpdates } from '../lib/updates';
@@ -156,10 +157,22 @@ export function Settings() {
       </section>
 
       <section className="card">
-        <h2 className="card-title">Sounds</h2>
+        <h2 className="card-title">Sounds and vibration</h2>
         <label className="check">
           <input type="checkbox" checked={snap.settings.sounds} onChange={(e) => updateSettings({ sounds: e.target.checked })} />
           <span>Play little sounds when I take, skip or refill a medicine</span>
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={snap.settings.haptics}
+            onChange={(e) => {
+              updateSettings({ haptics: e.target.checked });
+              // A taste of what it feels like.
+              if (e.target.checked) haptics.take();
+            }}
+          />
+          <span>Vibrate a little too, like a pill popping out of the pack</span>
         </label>
       </section>
 

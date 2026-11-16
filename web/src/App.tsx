@@ -4,6 +4,7 @@ import { ChartNoAxesColumn, Check, CloudOff, Download, LayoutGrid, NotebookPen, 
 import { handleBack } from './components/ui';
 import { today } from './lib/dates';
 import { initReminders, isNative, requestReminderPermission } from './lib/reminders';
+import { haptics } from './lib/haptics';
 import { getSnapshot, sync, useStore } from './lib/store';
 import { initUpdates, updateAvailable, useUpdates } from './lib/updates';
 import { Cabinet } from './screens/Cabinet';
@@ -117,7 +118,10 @@ export function App() {
       if (window.scrollY > 0) pullFrom.current = null;
       return;
     }
-    setPull(Math.min(110, down * 0.5));
+    const next = Math.min(110, down * 0.5);
+    // A click as the pull gets far enough to sync on letting go (and back, if it's taken back).
+    if (next >= PULL_ENOUGH !== pull >= PULL_ENOUGH) haptics.detent(next >= PULL_ENOUGH ? 0.8 : 0.2);
+    setPull(next);
   };
   const onPullEnd = () => {
     if (pullFrom.current == null) return;
@@ -127,7 +131,10 @@ export function App() {
       setPullResult(null);
       void sync().finally(() => {
         setRefreshing(false);
-        setPullResult(getSnapshot().syncStatus === 'idle' ? 'ok' : 'failed');
+        const ok = getSnapshot().syncStatus === 'idle';
+        setPullResult(ok ? 'ok' : 'failed');
+        if (ok) haptics.synced();
+        else haptics.failed();
         setTimeout(() => setPullResult(null), 1400);
       });
     }
@@ -147,7 +154,10 @@ export function App() {
           <span>Rxmindly</span>
         </div>
         {TABS.map(({ id, label, icon: Icon }) => (
-          <button key={id} className={`nav-item${tab === id ? ' on' : ''}`} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>
+          <button key={id} className={`nav-item${tab === id ? ' on' : ''}`} aria-current={tab === id ? 'page' : undefined} onClick={() => {
+              if (tab !== id) haptics.step();
+              setTab(id);
+            }}>
             <Icon size={24} />
             <span>{label}</span>
           </button>

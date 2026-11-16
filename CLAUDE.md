@@ -17,8 +17,9 @@ Self-hosted prescription tracker and medicine reminder. Three parts: a server in
   - `src/lib/transfer.ts`, `csv.ts` import and export: CSV per kind of data, and the JSON backup
   - `src/lib/widget.ts` hands the Android home screen widget its data
   - `src/lib/sounds.ts` the little sounds (Web Audio, no files), switched off in Settings
+  - `src/lib/haptics.ts` the vibrations that go with them (Android `HapticsPlugin`: haptic primitives where the phone has them, a waveform otherwise; `navigator.vibrate` in a browser), switched off in Settings
   - `src/lib/updates.ts` Android self-update from GitHub releases (checks when the app comes into view; no timer)
-  - `android/app/src/main/java/app/rxmindly/` hand-written native code: `NextDoseWidget` (the widget), `WidgetBridgePlugin` (how the web side reaches it) and `UpdaterPlugin` (downloads and installs an update) and `FileSaverPlugin` (Android's "save to" screen for exports; a download link does nothing in the app's web view, so always save through `saveFile()` in `src/lib/save-file.ts`)
+  - `android/app/src/main/java/app/rxmindly/` hand-written native code: `NextDoseWidget` (the widget), `WidgetBridgePlugin` (how the web side reaches it) and `UpdaterPlugin` (downloads and installs an update) and `HapticsPlugin` (plays the vibrations) and `FileSaverPlugin` (Android's "save to" screen for exports; a download link does nothing in the app's web view, so always save through `saveFile()` in `src/lib/save-file.ts`)
   - `src/screens/` Organizer, Cabinet, Journal, History, Settings, Login
   - `android/` Capacitor project. `android/app/src/main/assets/public` is generated; never edit it.
 - `Dockerfile`, `docker-compose.yml` — one image: builds `web/`, serves it from the server.
@@ -77,7 +78,7 @@ podman build -t rxmindly . # docker is not installed on the dev machine; podman 
 ## State of testing
 
 - Server and logic tests pass. The web app was checked in headless Chromium at phone and desktop sizes, light and dark.
-- **The home screen widget, stale-notification clearing, pull-to-sync and swipe between days have only been compiled or tried with simulated touches**, never on a real phone.
+- **The home screen widget, haptics, stale-notification clearing, pull-to-sync and swipe between days have only been compiled or tried with simulated touches**, never on a real phone.
 - The user installed the first Android build on their phone on 2026-11-11 and reported it working. Nothing added since has been confirmed on a device: the emulator cannot run on the dev machine, so native changes are only ever compiled here.
 - The web app has no reminders; they come only from the Android app. The daily journal reminder (off by default) is part of the same schedule and is skipped on days already written. Reminders are scheduled 14 days ahead each time the app runs.
 

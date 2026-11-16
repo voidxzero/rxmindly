@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Field } from '../components/ui';
 import { ApiError, api, cleanAddress, findServer, type ServerStatus } from '../lib/api';
+import { haptics } from '../lib/haptics';
 import { isNative } from '../lib/reminders';
 import { getSnapshot, signIn } from '../lib/store';
 
@@ -65,6 +66,7 @@ export function Login() {
       );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not sign in');
+      haptics.failed();
       setBusy(false);
     }
   };

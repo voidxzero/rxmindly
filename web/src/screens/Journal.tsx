@@ -4,6 +4,7 @@ import { QuestionInput } from '../components/JournalInput';
 import { useNow } from '../components/ui';
 import { addDays, dateRange, formatDate, friendlyDate, today } from '../lib/dates';
 import { activeQuestions, entryFor, formatScaled, fromScale, journalTrends, scaleTicks, type Question, type Trend } from '../lib/journal';
+import { haptics } from '../lib/haptics';
 import { sounds } from '../lib/sounds';
 import { dispatch, getSnapshot, useStore } from '../lib/store';
 import { cssColor, type JournalEntry } from '../lib/types';
@@ -38,7 +39,10 @@ export function Journal() {
 
   /** Saves one answer (stored on 1–5), or clears it with null. */
   const answer = (question: Question, value: number | null) => {
-    if (value != null) sounds.tap();
+    if (value != null) {
+      sounds.tap();
+      haptics.answer((value - 1) / 4);
+    }
     saveEntry(date, (e) => {
       const answers = { ...e.answers };
       if (value == null) delete answers[question.id];

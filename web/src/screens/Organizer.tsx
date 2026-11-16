@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Clock, Plus, SkipForward, TriangleAlert, Undo2 } from 'lucide-react';
 import { PillMark, Sheet, useNow } from '../components/ui';
 import { celebrate } from '../lib/celebrate';
+import { haptics } from '../lib/haptics';
 import { sounds } from '../lib/sounds';
 import { DAY_LETTERS, addDays, dateTimeOf, dayOfWeek, formatClock, formatDate, formatDuration, formatTime, friendlyDate, nowTime, partOfDay, timeOf, toDateStr, today, weekStart } from '../lib/dates';
 import { dueOn, groupByTime, indexDoses, phaseOf, supplyOf, uid, unitLabel, type DoseIndex, type DueItem } from '../lib/logic';
@@ -30,20 +31,28 @@ function markFresh(ids: string[]) {
 function take(origin: Element | null, items: DueItem[], takenAt = new Date()) {
   if (!items.length) return;
   markFresh(items.map((i) => i.doseId));
+  const wasOk = new Set(items.filter((i) => supplyOf(i.med, getSnapshot().state).level === 'ok').map((i) => i.med.id));
   dispatch(...items.map((i) => ({ type: 'dose.put' as const, dose: { ...doseFor(i, 'taken'), takenAt: takenAt.toISOString() } })));
   const { state } = getSnapshot();
   const dayDone = dueOn(state, items[0].date, indexDoses(state)).every((i) => i.dose?.status === 'taken');
   celebrate(origin, dayDone);
   if (dayDone) sounds.dayDone();
   else sounds.take();
+  // This dose is the one that left a bottle running low: feel it wobble.
+  const nowLow = items.some((i) => wasOk.has(i.med.id) && supplyOf(state.meds.find((m) => m.id === i.med.id) ?? i.med, state).level !== 'ok');
+  if (nowLow) haptics.takeLow(dayDone);
+  else if (dayDone) haptics.dayDone();
+  else haptics.take();
 }
 const skip = (item: DueItem) => {
   dispatch({ type: 'dose.put', dose: doseFor(item, 'skipped') });
   sounds.skip();
+  haptics.skip();
 };
 const undo = (doseId: string) => {
   dispatch({ type: 'dose.delete', id: doseId });
   sounds.undo();
+  haptics.undo();
 };
 
 export function Organizer(props: { date: string; onDate: (date: string) => void; onOpenCabinet: (addNew?: boolean) => void }) {
@@ -71,6 +80,7 @@ export function Organizer(props: { date: string; onDate: (date: string) => void;
   const [slide, setSlide] = useState<'next' | 'prev' | null>(null);
   const go = (to: string, direction: 'next' | 'prev' | null = null) => {
     setSlide(direction);
+    if (to !== date) haptics.step();
     props.onDate(to);
   };
   const onTouchStart = (e: React.TouchEvent) => {
@@ -422,6 +432,7 @@ function AsNeeded({ meds, state, date, isToday }: { meds: Med[]; state: AppState
     });
     celebrate(button);
     sounds.take();
+    haptics.take();
   };
   return (
     <article className="slot">

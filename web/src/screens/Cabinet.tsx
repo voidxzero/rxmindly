@@ -3,6 +3,7 @@ import { Archive, ArchiveRestore, PackagePlus, Pencil, Plus, Trash2, TriangleAle
 import { Bottle, Field, ICON_LABELS, NumberInput, PillMark, Sheet, Stepper } from '../components/ui';
 import { DAY_LETTERS, DAY_NAMES, formatDate, today } from '../lib/dates';
 import { activeSchedules, defaultIcon, describeSchedule, formatQty, iconOf, indexDoses, reviseSchedules, supplyOf, uid, unitLabel, type Supply } from '../lib/logic';
+import { haptics } from '../lib/haptics';
 import { sounds } from '../lib/sounds';
 import { dispatch, useStore } from '../lib/store';
 import { MED_COLORS, MED_FORMS, MED_ICONS, cssColor, isCustomColor, type AppState, type FollowUp, type Med, type MedIcon, type Op, type Schedule } from '../lib/types';
@@ -275,6 +276,7 @@ function RefillSheet({ med, state, onClose }: { med: Med; state: AppState; onClo
     if (!valid) return;
     dispatch({ type: 'refill.add', refill: { id: uid(), medId: med.id, date: today(), qty, note: note.trim() }, useRefill });
     sounds.refill();
+    haptics.refill();
     onClose();
   };
 
