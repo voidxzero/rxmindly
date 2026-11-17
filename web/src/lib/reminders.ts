@@ -6,6 +6,8 @@ import { LocalNotifications, type LocalNotificationSchema } from '@capacitor/loc
 import { addDays, dateTimeOf, formatTime, fromDateStr, today } from './dates';
 import { entryFor } from './journal';
 import { dueOn, indexDoses, supplyOf, unitLabel, type DueItem } from './logic';
+import { alarmNative, initAlarm } from './alarm-native';
+import { alarmSlots, type AlarmItem } from './alarms';
 import { dispatch, getSnapshot, subscribe } from './store';
 import type { Dose } from './types';
 import { updateWidget } from './widget';
@@ -101,7 +103,7 @@ async function clearStaleReminders() {
   if (stale.length) await LocalNotifications.removeDeliveredNotifications({ notifications: stale });
 }
 
-const loadSnoozes = (): Snooze[] => {
+export const loadSnoozes = (): Snooze[] => {
   try {
     return (JSON.parse(localStorage.getItem(SNOOZE_KEY) ?? '[]') as Snooze[]).filter((s) => s.doseId && s.at > Date.now());
   } catch {
@@ -109,6 +111,38 @@ const loadSnoozes = (): Snooze[] => {
   }
 };
 const saveSnoozes = (list: Snooze[]) => localStorage.setItem(SNOOZE_KEY, JSON.stringify(list));
+
+/** Snoozes doses for `minutes` (alarm style: they ring again then, with whatever else is due). Returns when they come back. */
+export function snoozeDoses(doseIds: string[], minutes: number): number {
+  const at = Date.now() + minutes * 60_000;
+  saveSnoozes([...loadSnoozes().filter((s) => !doseIds.includes(s.doseId)), ...doseIds.map((doseId) => ({ doseId, at }))]);
+  rescheduleReminders();
+  return at;
+}
+
+/** Takes a snooze back (the alarm screen's undo). */
+export function cancelSnooze(doseId: string) {
+  saveSnoozes(loadSnoozes().filter((s) => s.doseId !== doseId));
+  rescheduleReminders();
+}
+
+const alarmMode = () => getSnapshot().settings.reminders && getSnapshot().settings.reminderStyle === 'alarm';
+
+/** The alarms for doses still to take: one per moment, with every medicine due then. */
+function buildAlarms() {
+  const { state } = getSnapshot();
+  if (!alarmMode()) return [];
+  const doses = indexDoses(state);
+  const start = today();
+  const pending: DueItem[] = [];
+  for (let i = -1; i < HORIZON_DAYS; i++) pending.push(...pendingOn(addDays(start, i), state, doses));
+  return alarmSlots(
+    pending,
+    (item) => ({ name: item.med.name, detail: [item.med.strength, unitLabel(item.med, item.qty)].filter(Boolean).join(' · '), medId: item.med.id }),
+    loadSnoozes(),
+    Date.now(),
+  );
+}
 
 function describe(item: DueItem) {
   return {
@@ -143,7 +177,8 @@ function build(): LocalNotificationSchema[] {
   // One notification per dose. Starts from yesterday: a follow-up dose to a
   // late-evening dose can come due after midnight. A follow-up dose gets its
   // reminder once the dose before it is recorded and its time is known.
-  for (let i = -1; i < HORIZON_DAYS && settings.reminders; i++) {
+  // In alarm style the doses ring as alarms (see buildAlarms) instead of arriving as notifications.
+  for (let i = -1; i < HORIZON_DAYS && settings.reminders && settings.reminderStyle !== 'alarm'; i++) {
     for (const item of pendingOn(addDays(start, i), state, doses)) {
       add(item, 0, item.at);
       if (settings.followUpMinutes > 0) {
@@ -207,6 +242,15 @@ async function reschedule() {
   const { token, settings } = getSnapshot();
   await updateWidget().catch((err) => console.error('widget', err));
   await clearStaleReminders().catch((err) => console.error('clearing reminders', err));
+  // Alarms are replaced every time too (an empty list clears them, e.g. after switching back to notifications).
+  await alarmNative
+    .schedule({
+      alarms: token ? buildAlarms() : [],
+      sound: settings.alarmSound,
+      vibrate: settings.alarmVibrate,
+      silenceMinutes: settings.alarmSilenceMinutes,
+    })
+    .catch((err) => console.error('alarms', err));
   const pending = await LocalNotifications.getPending();
   if (pending.notifications.length) {
     await LocalNotifications.cancel({ notifications: pending.notifications.map((n) => ({ id: n.id })) });
@@ -217,9 +261,10 @@ async function reschedule() {
   if (notifications.length) await LocalNotifications.schedule({ notifications });
 }
 
-function takeDose(date: string, doseId: string) {
+/** Records a dose as taken or skipped, as the Organizer does. Does nothing if it is already recorded. */
+export function recordDose(date: string, doseId: string, status: 'taken' | 'skipped') {
   const item = pendingOn(date).find((i) => i.doseId === doseId);
-  if (!item) return; // already recorded
+  if (!item) return;
   dispatch({
     type: 'dose.put',
     dose: {
@@ -228,11 +273,25 @@ function takeDose(date: string, doseId: string) {
       scheduleId: item.schedule.id,
       date,
       time: item.time,
-      status: 'taken',
+      status,
       qty: item.qty,
-      takenAt: new Date().toISOString(),
+      takenAt: status === 'taken' ? new Date().toISOString() : null,
     } satisfies Dose,
   });
+}
+
+const takeDose = (date: string, doseId: string) => recordDose(date, doseId, 'taken');
+
+/** A made-up alarm in a few seconds, so the alarm style can be tried (Settings). */
+export async function sendTestAlarm() {
+  const time = new Date(Date.now() + 10_000);
+  const hhmm = `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`;
+  const date = today();
+  const items: AlarmItem[] = [
+    { id: 'test:1', date, time: hhmm, name: 'Vitamin D', detail: '1000 IU · 1 capsule' },
+    { id: 'test:2', date, time: hhmm, name: 'Metformin', detail: '500 mg · 1 tablet' },
+  ];
+  await alarmNative.test(items, 10);
 }
 
 export async function initReminders(onOpenDay: (date: string, where: 'organizer' | 'journal') => void) {
@@ -282,6 +341,7 @@ export async function initReminders(onOpenDay: (date: string, where: 'organizer'
     onOpenDay(date, 'organizer');
   });
 
+  initAlarm();
   let last = getSnapshot();
   subscribe(() => {
     const next = getSnapshot();

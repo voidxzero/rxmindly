@@ -3,6 +3,7 @@ import { Check, ChevronLeft, ChevronRight, Minus, X } from 'lucide-react';
 import { PillMark, Sheet, useNow } from '../components/ui';
 import { DAY_LETTERS, DAY_NAMES, addDays, addMonths, dateRange, dayOfWeek, formatClock, formatDate, formatTime, friendlyDate, partOfDay, today } from '../lib/dates';
 import { buildHistory, phaseOf, unitLabel, type Cell, type CellStatus, type History as HistoryData, type MedHistory } from '../lib/logic';
+import { haptics } from '../lib/haptics';
 import { useStore } from '../lib/store';
 import type { AppState } from '../lib/types';
 
@@ -235,7 +236,7 @@ export function History() {
                 )}
               </>
             )}
-            <Legend />
+            {view === 'chart' && <Legend />}
           </section>
 
           {scheduledRows.length > 0 && (
@@ -320,8 +321,32 @@ function CalendarView({ state, today: t, onPick }: { state: AppState; today: str
   const stats = row ?? history;
   const leading = dayOfWeek(first);
 
+  // Swiping the calendar sideways goes to the next (left) or previous (right) month.
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const onSwipeStart = (e: React.TouchEvent) => {
+    swipe.current = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  };
+  const onSwipeEnd = (e: React.TouchEvent) => {
+    const from = swipe.current;
+    swipe.current = null;
+    if (!from || e.changedTouches.length !== 1) return;
+    const dx = e.changedTouches[0].clientX - from.x;
+    const dy = e.changedTouches[0].clientY - from.y;
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0 && month >= thisMonth) return; // nothing after this month
+    haptics.step();
+    setMonth(addMonths(month, dx < 0 ? 1 : -1));
+  };
+
   return (
     <>
+      <p className="muted card-sub">
+        {stats.expected
+          ? `${stats.taken} of ${stats.expected} scheduled doses taken${stats.missed ? ` · ${stats.missed} missed` : ''}. Tap a day to see its doses.`
+          : history.rows.length
+            ? 'Nothing was scheduled this month. Tap a day to see its doses.'
+            : 'Nothing recorded this month.'}
+      </p>
       <div className="cal-head">
         <h3 className="cal-month">{formatDate(first, { month: 'long', year: 'numeric' })}</h3>
         <div className="week-nav">
@@ -338,23 +363,7 @@ function CalendarView({ state, today: t, onPick }: { state: AppState; today: str
           </button>
         </div>
       </div>
-      {history.rows.length > 1 && (
-        <select className="input cal-filter" value={row ? medId : ''} onChange={(e) => setMedId(e.target.value)} aria-label="Medicine">
-          <option value="">All medicines</option>
-          {history.rows.map((r) => (
-            <option key={r.med.id} value={r.med.id}>
-              {r.med.name}
-            </option>
-          ))}
-        </select>
-      )}
-      <p className="muted card-sub">
-        {stats.expected
-          ? `${stats.taken} of ${stats.expected} scheduled doses taken${stats.missed ? ` · ${stats.missed} missed` : ''}. Tap a day to see its doses.`
-          : history.rows.length
-            ? 'Nothing was scheduled this month. Tap a day to see its doses.'
-            : 'Nothing recorded this month.'}
-      </p>
+      <div className="cal-swipe" onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
       <div className="calendar" role="grid" aria-label={formatDate(first, { month: 'long', year: 'numeric' })}>
         {DAY_NAMES.map((d) => (
           <span key={d} className="cal-dow" role="columnheader">
@@ -388,6 +397,18 @@ function CalendarView({ state, today: t, onPick }: { state: AppState; today: str
           );
         })}
       </div>
+      </div>
+      <Legend />
+      {history.rows.length > 1 && (
+        <select className="input cal-filter" value={row ? medId : ''} onChange={(e) => setMedId(e.target.value)} aria-label="Medicine">
+          <option value="">All medicines</option>
+          {history.rows.map((r) => (
+            <option key={r.med.id} value={r.med.id}>
+              {r.med.name}
+            </option>
+          ))}
+        </select>
+      )}
     </>
   );
 }

@@ -17,6 +17,14 @@ export interface Settings {
   sounds: boolean;
   /** Little vibrations to go with them (Android). */
   haptics: boolean;
+  /** How a dose reminder arrives: a notification, or a full-screen alarm that stays until each medicine is answered. */
+  reminderStyle: 'notification' | 'alarm';
+  /** Minutes a snoozed alarm waits before it rings again. */
+  alarmSnoozeMinutes: number;
+  /** Minutes before an alarm quiets itself (the full-screen view stays). */
+  alarmSilenceMinutes: number;
+  alarmSound: boolean;
+  alarmVibrate: boolean;
 }
 
 export type SyncStatus = 'idle' | 'syncing' | 'offline' | 'error';
@@ -59,7 +67,7 @@ function firstBatch(outbox: Op[]): Op[] {
   }
   return outbox.slice(0, n);
 }
-const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, journalReminder: false, journalReminderTime: '18:30', sounds: true, haptics: true, journalScale: 5, journalScaleKind: 'numbers' };
+const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, journalReminder: false, journalReminderTime: '18:30', sounds: true, haptics: true, journalScale: 5, journalScaleKind: 'numbers', reminderStyle: 'notification', alarmSnoozeMinutes: 15, alarmSilenceMinutes: 5, alarmSound: true, alarmVibrate: true };
 
 function load(): Snapshot {
   const base: Snapshot = {

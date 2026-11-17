@@ -94,12 +94,9 @@ function SliderInput({ question: q, value, max, numbered, locked, smooth = false
   };
   useEffect(() => () => commit(), []); // eslint-disable-line react-hooks/exhaustive-deps
   const move = (raw: number) => {
-    // The smooth slider still catches at the center, with a firmer click, then lets go again past it.
+    // The smooth slider catches at the center, with a click (its only haptic), then lets go again past it.
     const stored = smooth && Math.abs(raw - CENTER) < CENTER_CATCH ? CENTER : raw;
     if (smooth && stored === CENTER && pos !== CENTER) haptics.answer(0.5);
-    // A soft tick at each whole number the thumb passes, firmer toward the top.
-    const n = Math.round(toScale(stored, max));
-    if (n !== Math.round(toScale(pos, max))) haptics.detent((n - 1) / Math.max(1, max - 1));
     setPos(stored);
     pending.current = stored;
     clearTimeout(timer.current);

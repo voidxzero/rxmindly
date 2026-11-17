@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { App as NativeApp } from '@capacitor/app';
+import { SystemBars, SystemBarsStyle, SystemBarType } from '@capacitor/core';
 import { ChartNoAxesColumn, Check, CloudOff, Download, LayoutGrid, NotebookPen, Pill, RefreshCw, Settings as SettingsIcon, X } from 'lucide-react';
+import { AlarmScreen } from './components/AlarmScreen';
 import { handleBack } from './components/ui';
+import { hasActiveAlarm } from './lib/alarm-native';
 import { today } from './lib/dates';
 import { initReminders, isNative, requestReminderPermission } from './lib/reminders';
 import { haptics } from './lib/haptics';
@@ -28,6 +31,17 @@ const TABS: { id: Tab; label: string; icon: typeof Pill }[] = [
 let openDay: (date: string, where: 'organizer' | 'journal') => void = () => {};
 void initReminders((date, where) => openDay(date, where));
 initUpdates();
+
+// Where the app draws behind the status bar (newer Android System WebView), a dark fade sits there
+// (see body::before in styles.css), so the clock and icons turn white to read on it.
+// With an older WebView the bar has its own plain background and keeps the phone's usual icons.
+if (isNative) {
+  const drawsBehindStatusBar = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-top')) > 0;
+  const styleStatusBar = () =>
+    void SystemBars.setStyle({ bar: SystemBarType.StatusBar, style: drawsBehindStatusBar() ? SystemBarsStyle.Dark : SystemBarsStyle.Default }).catch(() => {});
+  window.addEventListener('load', () => setTimeout(styleStatusBar, 300));
+  window.addEventListener('resize', styleStatusBar);
+}
 
 export function App() {
   const snap = useStore();
@@ -97,6 +111,7 @@ export function App() {
   useEffect(() => {
     if (!isNative) return;
     const listener = NativeApp.addListener('backButton', () => {
+      if (hasActiveAlarm()) return; // an alarm can only be closed by answering each medicine
       if (handleBack()) return;
       if (tab !== 'organizer') setTab('organizer');
       else void NativeApp.minimizeApp();
@@ -170,6 +185,8 @@ export function App() {
           </button>
         ))}
       </nav>
+      {isNative && <AlarmScreen />}
+      <SyncTick at={snap.lastSyncAt} hidden={refreshing || pullResult != null || pull > 8} />
       {pullResult && !refreshing && pull <= 8 && (
         <div className={`pull done ${pullResult}`} role="status" aria-label={pullResult === 'ok' ? 'Synced' : 'Sync failed'}>
           {pullResult === 'ok' ? <Check size={22} strokeWidth={3} /> : <X size={22} strokeWidth={3} />}
@@ -215,5 +232,22 @@ export function App() {
         )}
       </main>
     </div>
+  );
+}
+
+/** A tiny check in the corner for a moment after each successful sync, so you can tell it worked without being told. */
+function SyncTick({ at, hidden }: { at: string | null; hidden: boolean }) {
+  const [shown, setShown] = useState<string | null>(null);
+  useEffect(() => {
+    if (!at) return;
+    setShown(at);
+    const timer = setTimeout(() => setShown(null), 1800);
+    return () => clearTimeout(timer);
+  }, [at]);
+  if (!shown || hidden) return null;
+  return (
+    <span key={shown} className="sync-tick" role="status" aria-label="Synced">
+      <Check size={11} strokeWidth={4} />
+    </span>
   );
 }

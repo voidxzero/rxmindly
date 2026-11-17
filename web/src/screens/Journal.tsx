@@ -41,7 +41,8 @@ export function Journal() {
   const answer = (question: Question, value: number | null) => {
     if (value != null) {
       sounds.tap();
-      haptics.answer((value - 1) / 4);
+      // Sliders give no click on settling (only the one at the center, while sliding); the numbered buttons do.
+      if (settings.journalScaleKind !== 'slider' && max <= 10) haptics.answer((value - 1) / 4);
     }
     saveEntry(date, (e) => {
       const answers = { ...e.answers };
@@ -262,7 +263,7 @@ function NoteBox({ date, saved }: { date: string; saved: string }) {
 const LEFT = 22;
 const RIGHT = 10;
 const TOP = 10;
-const BOTTOM = 22;
+const BOTTOM = 34; // room under the plot for the day handle and the dates
 
 interface View {
   from: number;
@@ -318,6 +319,12 @@ function JournalChart({ trends, dates, max, onPick }: { trends: Trend[]; dates: 
     setView({ from, to: from + s });
   };
 
+  // One finger (or the mouse) dragging the chart scrolls through the days.
+  const pan = useRef<{ x: number; view: View } | null>(null);
+  // The handle under the line picks which day is read out; the chart itself only scrolls and zooms.
+  const handleDrag = useRef<{ startX: number; moved: boolean } | null>(null);
+  const clampDay = (i: number) => Math.max(0, Math.min(last, i));
+
   // Two fingers on the chart: pinch to zoom, and move them together to pan.
   const pointers = useRef(new Map<number, number>());
   const pinch = useRef<{ dist: number; mid: number; view: View } | null>(null);
@@ -343,6 +350,12 @@ function JournalChart({ trends, dates, max, onPick }: { trends: Trend[]; dates: 
     return () => el.removeEventListener('wheel', onWheel);
   });
 
+  useEffect(() => {
+    if (hover == null) return;
+    if (hover < firstShown) setHover(firstShown);
+    else if (hover > lastShown) setHover(lastShown);
+  }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const day = (i: number) => formatDate(dates[i], { weekday: 'short', month: 'short', day: 'numeric' });
   const firstShown = Math.ceil(view.from - 1e-6);
   const lastShown = Math.floor(view.to + 1e-6);
@@ -352,7 +365,13 @@ function JournalChart({ trends, dates, max, onPick }: { trends: Trend[]; dates: 
     <section className="card trend">
       <div className="trend-head">
         <h3>{soloQuestion ? soloQuestion.text : 'All questions'}</h3>
-        <span className="muted">{hover == null ? 'Averages' : day(hover)}</span>
+        {hover != null && shown.some(({ trend }) => trend.values[hover] != null) ? (
+          <button type="button" className="link-btn" onClick={() => onPick(dates[hover])}>
+            {day(hover)} · Open
+          </button>
+        ) : (
+          <span className="muted">{hover == null ? 'Averages' : day(hover)}</span>
+        )}
       </div>
       <div ref={wrap}>
         <svg
@@ -372,9 +391,14 @@ function JournalChart({ trends, dates, max, onPick }: { trends: Trend[]; dates: 
               }
               pinch.current = { ...twoFinger(), view };
               pinched.current = true;
-              setHover(null);
+              pan.current = null;
             } else if (pointers.current.size === 1) {
-              setHover(indexAt(e.clientX));
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                // Scrolling still works without capture, just not past the chart's edge.
+              }
+              pan.current = { x: e.clientX, view };
             }
           }}
           onPointerMove={(e) => {
@@ -383,23 +407,23 @@ function JournalChart({ trends, dates, max, onPick }: { trends: Trend[]; dates: 
             if (p && pointers.current.size >= 2) {
               const now = twoFinger();
               zoomTo(p.view, p.mid, (p.view.to - p.view.from) * (p.dist / now.dist), now.mid);
-            } else if (!pinched.current) {
-              setHover(indexAt(e.clientX));
+            } else if (pan.current && !pinched.current && zoomed) {
+              // Dragging the chart one way moves the days the other way, like a page.
+              const box = svg.current!.getBoundingClientRect();
+              const shift = (((e.clientX - pan.current.x) / box.width) * W / plotW) * (pan.current.view.to - pan.current.view.from);
+              const from = Math.max(0, Math.min(last - (pan.current.view.to - pan.current.view.from), pan.current.view.from - shift));
+              setView({ from, to: from + (pan.current.view.to - pan.current.view.from) });
             }
           }}
           onPointerUp={(e) => {
             pointers.current.delete(e.pointerId);
+            pan.current = null;
             if (pointers.current.size < 2) pinch.current = null;
           }}
           onPointerCancel={(e) => {
             pointers.current.delete(e.pointerId);
+            pan.current = null;
             if (pointers.current.size < 2) pinch.current = null;
-          }}
-          onPointerLeave={(e) => {
-            if (e.pointerType === 'mouse') setHover(null);
-          }}
-          onClick={() => {
-            if (!pinched.current && hover != null && shown.some(({ trend }) => trend.values[hover] != null)) onPick(dates[hover]);
           }}
         >
           <defs>
@@ -414,7 +438,7 @@ function JournalChart({ trends, dates, max, onPick }: { trends: Trend[]; dates: 
           <text className="trend-axis" x={W - RIGHT} y={H - 5} textAnchor="end">
             {lastShown >= last ? 'Today' : formatDate(dates[lastShown], { month: 'short', day: 'numeric' })}
           </text>
-          {hover != null && <line className="trend-cross" x1={x(hover)} x2={x(hover)} y1={TOP - 4} y2={H - BOTTOM + 4} />}
+          {hover != null && <line className="trend-cross" x1={x(hover)} x2={x(hover)} y1={TOP - 4} y2={H - BOTTOM + 6} />}
           <g clipPath={`url(#${clipId})`}>
             {shown.map(({ trend, color }, k) => {
               let path = '';
@@ -429,6 +453,55 @@ function JournalChart({ trends, dates, max, onPick }: { trends: Trend[]; dates: 
                 </g>
               );
             })}
+          </g>
+          <g
+            className={`trend-handle${hover != null ? ' on' : ''}`}
+            transform={`translate(${x(hover ?? lastShown)} ${H - BOTTOM + 14})`}
+            style={{ touchAction: 'none' }}
+            role="slider"
+            tabIndex={0}
+            aria-label="Day selector"
+            aria-valuemin={0}
+            aria-valuemax={last}
+            aria-valuenow={hover ?? last}
+            aria-valuetext={hover == null ? 'No day selected' : day(hover)}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                // Dragging still works while the pointer stays over the handle.
+              }
+              handleDrag.current = { startX: e.clientX, moved: false };
+            }}
+            onPointerMove={(e) => {
+              const d = handleDrag.current;
+              if (!d) return;
+              e.stopPropagation();
+              if (Math.abs(e.clientX - d.startX) > 4) d.moved = true;
+              if (d.moved) setHover(clampDay(indexAt(e.clientX)));
+            }}
+            onPointerUp={(e) => {
+              e.stopPropagation();
+              const d = handleDrag.current;
+              handleDrag.current = null;
+              // A tap on the handle puts the line on the latest day shown, or takes it away again.
+              if (d && !d.moved) setHover(hover == null ? lastShown : null);
+            }}
+            onPointerCancel={() => {
+              handleDrag.current = null;
+            }}
+            onKeyDown={(e) => {
+              const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+              if (e.key === 'Escape') setHover(null);
+              if (!delta) return;
+              e.preventDefault();
+              setHover(clampDay((hover ?? lastShown) + delta));
+            }}
+          >
+            <circle className="trend-handle-hit" r={20} />
+            <circle className="trend-handle-knob" r={9} />
+            <path className="trend-handle-grip" d="M-3 -3.5V3.5M0 -3.5V3.5M3 -3.5V3.5" />
           </g>
         </svg>
       </div>
@@ -454,7 +527,7 @@ function JournalChart({ trends, dates, max, onPick }: { trends: Trend[]; dates: 
       </ul>
       <div className="chart-foot">
         <span className="field-hint">
-          {soloQuestion ? `1 ${soloQuestion.low.toLowerCase()}, ${max} ${soloQuestion.high.toLowerCase()}. Tap it again to see them all.` : 'Tap a question to see it alone. Pinch the chart to zoom.'}
+          {soloQuestion ? `1 ${soloQuestion.low.toLowerCase()}, ${max} ${soloQuestion.high.toLowerCase()}. Tap it again to see them all.` : 'Tap a question to see it alone. Pinch to zoom, swipe to scroll, drag the handle to read a day.'}
         </span>
         {zoomed && (
           <button className="link-btn" onClick={() => setView({ from: 0, to: last })}>

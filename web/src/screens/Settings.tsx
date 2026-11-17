@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Bell, Check, CircleCheck, Download, KeyRound, LogOut, Pencil, Plus, RefreshCw, Trash2, TriangleAlert, Upload, Wifi, X } from 'lucide-react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
+import { Bell, BellRing, Check, ChevronDown, CircleCheck, Download, KeyRound, LogOut, Pencil, Plus, RefreshCw, Trash2, TriangleAlert, Upload, Wifi, X } from 'lucide-react';
 import { QuestionInput } from '../components/JournalInput';
 import { Field, Sheet } from '../components/ui';
 import { ApiError, api } from '../lib/api';
@@ -11,7 +11,8 @@ import { saveFile } from '../lib/save-file';
 import { EMPTY_STATE, type AppState } from '../lib/types';
 import { checkForUpdate, installUpdate, isNewer, updateAvailable, useUpdates } from '../lib/updates';
 import { uid } from '../lib/logic';
-import { isNative, reminderPermission, requestReminderPermission, sendTestReminder, type ReminderPermission } from '../lib/reminders';
+import { alarmNative } from '../lib/alarm-native';
+import { isNative, reminderPermission, requestReminderPermission, sendTestAlarm, sendTestReminder, type ReminderPermission } from '../lib/reminders';
 import { activeUrl, changeServerUrl, checkAddress, dispatch, serverHasFeature, serverVersion, setBackupUrl, signOut, sync, updateSettings, useStore, withServer, type AddressCheck } from '../lib/store';
 
 export function syncSummary(snap: ReturnType<typeof useStore>): { text: string; tone: 'ok' | 'warn' | 'bad' | 'info' } {
@@ -66,6 +67,17 @@ export function Settings() {
     }
   };
 
+  const alarmStyle = snap.settings.reminders && snap.settings.reminderStyle === 'alarm';
+  const [fullScreenAllowed, setFullScreenAllowed] = useState(true);
+  useEffect(() => {
+    if (!isNative || !alarmStyle) return;
+    void alarmNative.fullScreenAllowed().then(setFullScreenAllowed);
+  }, [alarmStyle]);
+
+  // The sections fold away; only one is open at a time. App updates and Your server stay as they are.
+  const [openSection, setOpenSection] = useState<string | null>(null);
+  const toggleSection = (id: string) => setOpenSection((now) => (now === id ? null : id));
+
   return (
     <div className="screen narrow">
       <header className="screen-head">
@@ -88,8 +100,7 @@ export function Settings() {
         </p>
       </section>
 
-      <section className="card">
-        <h2 className="card-title">Reminders</h2>
+      <Accordion title="Reminders" open={openSection === 'reminders'} onToggle={() => toggleSection('reminders')}>
         {!isNative ? (
           <p className="muted">Reminders come from the Rxmindly Android app. Sign in there with this account and your phone will remind you at each scheduled time, even with no connection.</p>
         ) : (
@@ -109,25 +120,87 @@ export function Settings() {
             )}
             {snap.settings.reminders && (
               <>
-                <Field label="If I haven’t taken it, remind me again after">
-                  <select className="input" value={snap.settings.followUpMinutes} onChange={(e) => updateSettings({ followUpMinutes: Number(e.target.value) })}>
-                    <option value={0}>Don’t remind again</option>
-                    <option value={15}>15 minutes</option>
-                    <option value={30}>30 minutes</option>
-                    <option value={60}>1 hour</option>
-                    <option value={120}>2 hours</option>
-                  </select>
+                <Field label="How should I remind you?">
+                  <div className="segmented" role="radiogroup" aria-label="Reminder style">
+                    {(['notification', 'alarm'] as const).map((kind) => (
+                      <button key={kind} type="button" role="radio" aria-checked={snap.settings.reminderStyle === kind} className={snap.settings.reminderStyle === kind ? 'on' : ''} onClick={() => updateSettings({ reminderStyle: kind })}>
+                        {kind === 'notification' ? 'Notification' : 'Alarm'}
+                      </button>
+                    ))}
+                  </div>
                 </Field>
-                {permission === 'granted' && (
-                  <button
-                    className="btn"
-                    onClick={() => {
-                      void sendTestReminder();
-                      setMessage('A test reminder will appear in a few seconds.');
-                    }}
-                  >
-                    <Bell size={18} /> Send a test reminder
-                  </button>
+                {alarmStyle ? (
+                  <>
+                    <p className="field-hint">
+                      An alarm takes over the whole screen, like the Clock app, and shows what to take. Medicines due at the same time share one alarm. It stays up until you’ve taken, skipped or snoozed every one.
+                    </p>
+                    {!fullScreenAllowed && (
+                      <div className="note warn">
+                        <p>Android isn’t letting Rxmindly use the full screen for alarms, so it will only show a notification.</p>
+                        <button className="btn small" onClick={() => void alarmNative.openFullScreenSettings()}>
+                          <BellRing size={18} /> Allow full-screen alarms
+                        </button>
+                      </div>
+                    )}
+                    <Field label="Snooze for">
+                      <select className="input" value={snap.settings.alarmSnoozeMinutes} onChange={(e) => updateSettings({ alarmSnoozeMinutes: Number(e.target.value) })}>
+                        {[5, 10, 15, 20, 30].map((m) => (
+                          <option key={m} value={m}>
+                            {m} minutes
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Quiet the alarm by itself after" hint="The sound and vibration stop; the screen stays until you answer.">
+                      <select className="input" value={snap.settings.alarmSilenceMinutes} onChange={(e) => updateSettings({ alarmSilenceMinutes: Number(e.target.value) })}>
+                        {[1, 5, 10, 15].map((m) => (
+                          <option key={m} value={m}>
+                            {m} {m === 1 ? 'minute' : 'minutes'}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <label className="check">
+                      <input type="checkbox" checked={snap.settings.alarmSound} onChange={(e) => updateSettings({ alarmSound: e.target.checked })} />
+                      <span>Play the alarm sound</span>
+                    </label>
+                    <label className="check">
+                      <input type="checkbox" checked={snap.settings.alarmVibrate} onChange={(e) => updateSettings({ alarmVibrate: e.target.checked })} />
+                      <span>Vibrate</span>
+                    </label>
+                    <button
+                      className="btn"
+                      onClick={() => {
+                        void sendTestAlarm();
+                        setMessage('A test alarm will go off in 10 seconds. You can lock the phone first to see how it looks then.');
+                      }}
+                    >
+                      <BellRing size={18} /> Try an alarm in 10 seconds
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Field label="If I haven’t taken it, remind me again after">
+                      <select className="input" value={snap.settings.followUpMinutes} onChange={(e) => updateSettings({ followUpMinutes: Number(e.target.value) })}>
+                        <option value={0}>Don’t remind again</option>
+                        <option value={15}>15 minutes</option>
+                        <option value={30}>30 minutes</option>
+                        <option value={60}>1 hour</option>
+                        <option value={120}>2 hours</option>
+                      </select>
+                    </Field>
+                    {permission === 'granted' && (
+                      <button
+                        className="btn"
+                        onClick={() => {
+                          void sendTestReminder();
+                          setMessage('A test reminder will appear in a few seconds.');
+                        }}
+                      >
+                        <Bell size={18} /> Send a test reminder
+                      </button>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -154,10 +227,9 @@ export function Settings() {
             )}
           </>
         )}
-      </section>
+      </Accordion>
 
-      <section className="card">
-        <h2 className="card-title">Sounds and vibration</h2>
+      <Accordion title="Sounds and vibration" open={openSection === 'sounds'} onToggle={() => toggleSection('sounds')}>
         <label className="check">
           <input type="checkbox" checked={snap.settings.sounds} onChange={(e) => updateSettings({ sounds: e.target.checked })} />
           <span>Play little sounds when I take, skip or refill a medicine</span>
@@ -174,12 +246,11 @@ export function Settings() {
           />
           <span>Vibrate a little too, like a pill popping out of the pack</span>
         </label>
-      </section>
+      </Accordion>
 
-      <JournalQuestions />
+      <JournalQuestions open={openSection === 'journal'} onToggle={() => toggleSection('journal')} />
 
-      <section className="card">
-        <h2 className="card-title">Your data</h2>
+      <Accordion title="Your data" open={openSection === 'data'} onToggle={() => toggleSection('data')}>
         <>
             <p className="muted card-sub">Save a copy to this {isNative ? 'phone' : 'computer'}. The CSV files open in any spreadsheet; the full backup holds everything in one file.</p>
             <div className="export-grid">
@@ -212,10 +283,9 @@ export function Settings() {
           />
         </label>
         <p className="field-hint">Takes any of the files above: a medicines, dose, journal or refill CSV, or a full backup. You’ll see what it will do before anything changes.</p>
-      </section>
+      </Accordion>
 
-      <section className="card">
-        <h2 className="card-title">Account</h2>
+      <Accordion title="Account" open={openSection === 'account'} onToggle={() => toggleSection('account')}>
         <div className="action-list">
           <button className="btn block" onClick={() => setChangingPassword(true)}>
             <KeyRound size={18} /> Change password
@@ -242,7 +312,7 @@ export function Settings() {
             </div>
           )}
         </div>
-      </section>
+      </Accordion>
 
       {message && <p className="note ok" role="status">{message}</p>}
       {plan && (
@@ -483,7 +553,7 @@ function AppUpdates() {
 }
 
 /** Which questions the daily journal asks: the built-in ones can be switched off, and you can add your own. */
-function JournalQuestions() {
+function JournalQuestions({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { state, settings } = useStore();
   const max = settings.journalScale;
   const index = Math.max(0, SCALE_SIZES.indexOf(max as (typeof SCALE_SIZES)[number]));
@@ -504,8 +574,7 @@ function JournalQuestions() {
     setText('');
   };
   return (
-    <section className="card">
-      <h2 className="card-title">Journal questions</h2>
+    <Accordion title="Journal questions" open={open} onToggle={onToggle}>
       <p className="muted card-sub">What the journal asks each day, and how you answer.</p>
       <div className="field">
         <span className="field-label">Answer with</span>
@@ -543,7 +612,11 @@ function JournalQuestions() {
           disabled={locked}
           list="scale-sizes"
           aria-valuetext={`1 to ${max}`}
-          onChange={(e) => updateSettings({ journalScale: SCALE_SIZES[Number(e.target.value)] })}
+          onChange={(e) => {
+            // A tick for each size, firmer toward the bigger ones.
+            haptics.detent(Number(e.target.value) / Math.max(1, SCALE_SIZES.length - 1));
+            updateSettings({ journalScale: SCALE_SIZES[Number(e.target.value)] });
+          }}
         />
         <datalist id="scale-sizes">
           {SCALE_SIZES.map((n, i) => (
@@ -600,7 +673,7 @@ function JournalQuestions() {
         </button>
       </form>
       <p className="field-hint">Removing a question keeps the answers you already gave; they just stop showing.</p>
-    </section>
+    </Accordion>
   );
 }
 
@@ -640,5 +713,25 @@ function PasswordSheet({ onClose, onDone }: { onClose: () => void; onDone: () =>
         </button>
       </form>
     </Sheet>
+  );
+}
+
+/** A settings section that folds away. Only one is open at a time (Settings keeps track of which). */
+function Accordion({ title, open, onToggle, children }: { title: string; open: boolean; onToggle: () => void; children: ReactNode }) {
+  const id = useId();
+  return (
+    <section className={`card accordion${open ? ' open' : ''}`}>
+      <h2 className="card-title">
+        <button type="button" className="accordion-head" aria-expanded={open} aria-controls={id} onClick={onToggle}>
+          <span>{title}</span>
+          <ChevronDown size={20} aria-hidden="true" />
+        </button>
+      </h2>
+      {open && (
+        <div id={id} className="accordion-body">
+          {children}
+        </div>
+      )}
+    </section>
   );
 }
