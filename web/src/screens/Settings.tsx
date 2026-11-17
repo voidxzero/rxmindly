@@ -541,6 +541,7 @@ function JournalQuestions() {
             value={sample}
             max={max}
             slider={settings.journalScaleKind === 'slider'}
+            smooth
             onAnswer={setSample}
           />
         </div>

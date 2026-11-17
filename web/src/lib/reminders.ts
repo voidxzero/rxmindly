@@ -159,7 +159,7 @@ function build(): LocalNotificationSchema[] {
   if (settings.journalReminder) {
     for (let i = 0; i < HORIZON_DAYS; i++) {
       const date = addDays(start, i);
-      const at = dateTimeOf(date, settings.journalReminderTime || '20:00');
+      const at = dateTimeOf(date, settings.journalReminderTime || '18:30');
       if (at.getTime() <= now || journalWritten(date, state)) continue;
       out.push({
         id: journalId(date),

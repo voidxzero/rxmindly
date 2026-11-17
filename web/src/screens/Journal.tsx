@@ -96,6 +96,7 @@ export function Journal() {
             max={max}
             slider={settings.journalScaleKind === 'slider'}
             locked={locked}
+            smooth
             onAnswer={(v) => answer(q, v)}
           />
         ))}

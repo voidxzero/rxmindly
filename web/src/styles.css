@@ -227,8 +227,7 @@ button {
 
   .nav {
     position: sticky;
-    top: 0;
-    inset: auto;
+    inset: 0 auto auto 0;
     height: 100dvh;
     flex-direction: column;
     gap: 4px;

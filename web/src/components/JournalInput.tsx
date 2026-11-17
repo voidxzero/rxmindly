@@ -6,6 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import { haptics } from '../lib/haptics';
 import { fromScale, toScale, type Question } from '../lib/journal';
 
+/** The middle of the stored 1–5 range, where the smooth slider catches (a little either side). */
+const CENTER = 3;
+const CENTER_CATCH = 0.02;
+
 interface Props {
   question: Question;
   /** The stored answer (1–5), or null when not answered. */
@@ -16,6 +20,8 @@ interface Props {
   slider: boolean;
   /** A finished day: shown, but not changeable until Edit is tapped. */
   locked?: boolean;
+  /** Sliders never snap: the thumb stays where it is let go, and the whole number is saved in the background. The Journal page and the preview in Settings. */
+  smooth?: boolean;
   /** Gets the answer as stored (1–5), or null when a chosen number is tapped again. */
   onAnswer: (value: number | null) => void;
 }
@@ -56,12 +62,16 @@ export function QuestionInput(props: Props) {
 }
 
 /**
- * Slides smoothly, but what is saved is always a whole number on the chosen
- * scale: on letting go it settles on the nearest one. So answers given with the
- * slider and with numbered buttons are the same kind of answer, and switching
- * between the two styles shows each one exactly.
+ * What is saved is always a whole number on the chosen scale, so answers given
+ * with the slider and with numbered buttons are the same kind of answer, and
+ * switching between the two styles shows each one exactly.
+ *
+ * Normally the slider settles on the nearest whole number when let go. With
+ * `smooth` (the Journal page and the Settings preview) it has no steps and never snaps: the thumb stays
+ * exactly where it is let go (except for a light catch, with a click, at the
+ * center) and the nearest whole number is saved in the background. (After a reload the thumb sits on that whole number.)
  */
-function SliderInput({ question: q, value, max, numbered, locked, onAnswer }: Props & { numbered: boolean; locked: boolean }) {
+function SliderInput({ question: q, value, max, numbered, locked, smooth = false, onAnswer }: Props & { numbered: boolean; locked: boolean }) {
   const snap = (stored: number) => fromScale(Math.round(toScale(stored, max)), max);
   // Held here while sliding and saved once it settles, so one drag is one save.
   const [pos, setPos] = useState(value ?? 3);
@@ -69,18 +79,24 @@ function SliderInput({ question: q, value, max, numbered, locked, onAnswer }: Pr
   const pending = useRef<number | null>(null);
   const dragging = useRef(false);
   useEffect(() => {
-    if (pending.current == null && value != null) setPos(value);
-  }, [value]);
+    if (pending.current == null && value != null) {
+      // Smooth: only follows a change that didn't come from here, so saving never nudges the thumb.
+      if (!smooth || Math.abs(snap(pos) - value) > 1e-6) setPos(value);
+    }
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const commit = () => {
     clearTimeout(timer.current);
     if (pending.current == null) return;
     const settled = snap(pending.current);
     pending.current = null;
-    setPos(settled);
+    if (!smooth) setPos(settled);
     onAnswer(settled);
   };
   useEffect(() => () => commit(), []); // eslint-disable-line react-hooks/exhaustive-deps
-  const move = (stored: number) => {
+  const move = (raw: number) => {
+    // The smooth slider still catches at the center, with a firmer click, then lets go again past it.
+    const stored = smooth && Math.abs(raw - CENTER) < CENTER_CATCH ? CENTER : raw;
+    if (smooth && stored === CENTER && pos !== CENTER) haptics.answer(0.5);
     // A soft tick at each whole number the thumb passes, firmer toward the top.
     const n = Math.round(toScale(stored, max));
     if (n !== Math.round(toScale(pos, max))) haptics.detent((n - 1) / Math.max(1, max - 1));
@@ -109,11 +125,11 @@ function SliderInput({ question: q, value, max, numbered, locked, onAnswer }: Pr
         aria-labelledby={`q-${q.id}`}
         aria-valuetext={answered ? (numbered ? `${shownNumber} of ${max}` : `${Math.round(((pos - 1) / 4) * 100)}% of the way to ${q.high}`) : 'Not answered'}
         min={1}
-        max={numbered ? max : 5}
-        step={numbered ? 1 : 0.01}
-        value={numbered ? shownNumber : pos}
+        max={smooth || !numbered ? 5 : max}
+        step={smooth ? 'any' : numbered ? 1 : 0.01}
+        value={numbered && !smooth ? shownNumber : pos}
         disabled={locked}
-        onChange={(e) => move(numbered ? fromScale(Number(e.target.value), max) : Number(e.target.value))}
+        onChange={(e) => move(numbered && !smooth ? fromScale(Number(e.target.value), max) : Number(e.target.value))}
         onPointerDown={() => {
           dragging.current = true;
         }}
@@ -129,7 +145,7 @@ function SliderInput({ question: q, value, max, numbered, locked, onAnswer }: Pr
           commit();
         }}
         onKeyDown={(e) => {
-          if (numbered) return;
+          if (numbered && !smooth) return;
           const delta = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
           if (!delta) return;
           e.preventDefault();

@@ -59,7 +59,7 @@ function firstBatch(outbox: Op[]): Op[] {
   }
   return outbox.slice(0, n);
 }
-const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, journalReminder: false, journalReminderTime: '20:00', sounds: true, haptics: true, journalScale: 5, journalScaleKind: 'numbers' };
+const DEFAULT_SETTINGS: Settings = { reminders: true, followUpMinutes: 30, journalReminder: false, journalReminderTime: '18:30', sounds: true, haptics: true, journalScale: 5, journalScaleKind: 'numbers' };
 
 function load(): Snapshot {
   const base: Snapshot = {
