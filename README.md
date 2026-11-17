@@ -1,4 +1,7 @@
-# Rxmindly
+<div align="center">
+  <img src="web/public/icon.svg" width="96" alt="Rxmindly icon: a teal square with a white and amber capsule">
+  <h1>Rxmindly</h1>
+</div>
 
 Keep track of your prescriptions and get reminded to take them. Your data lives on your own server.
 
