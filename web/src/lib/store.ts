@@ -236,6 +236,15 @@ export async function checkAddress(address: string): Promise<AddressCheck> {
 }
 
 /** Whether the server reports a feature in /api/status (servers older than the feature don't). Null when it can't be reached. */
+/** The version the server reports (the app's version it was built with), or null when it can't be reached. */
+export async function serverVersion(): Promise<string | null> {
+  try {
+    return (await api.status(activeUrl(snapshot), PROBE_MS)).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function serverHasFeature(feature: string): Promise<boolean | null> {
   try {
     const status = await api.status(activeUrl(snapshot), PROBE_MS);

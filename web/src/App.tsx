@@ -6,7 +6,7 @@ import { today } from './lib/dates';
 import { initReminders, isNative, requestReminderPermission } from './lib/reminders';
 import { haptics } from './lib/haptics';
 import { getSnapshot, sync, useStore } from './lib/store';
-import { initUpdates, updateAvailable, useUpdates } from './lib/updates';
+import { checkForUpdate, initUpdates, updateAvailable, useUpdates } from './lib/updates';
 import { Cabinet } from './screens/Cabinet';
 import { History } from './screens/History';
 import { Journal } from './screens/Journal';
@@ -71,12 +71,18 @@ export function App() {
   // Keep in step with the server: on open, on return, when the network comes back, and every minute.
   useEffect(() => {
     if (!signedIn) return;
-    void sync();
-    const onVisible = () => document.visibilityState === 'visible' && void sync();
-    const onOnline = () => void sync();
+    // Each automatic sync also looks for a new app version. checkForUpdate skips it if it checked
+    // in the last 5 minutes, so GitHub is asked at most about 12 times an hour.
+    const syncAndCheck = () => {
+      void sync();
+      void checkForUpdate();
+    };
+    syncAndCheck();
+    const onVisible = () => document.visibilityState === 'visible' && syncAndCheck();
+    const onOnline = () => syncAndCheck();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
-    const timer = setInterval(() => document.visibilityState === 'visible' && void sync(), 60_000);
+    const timer = setInterval(() => document.visibilityState === 'visible' && syncAndCheck(), 60_000);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onOnline);
@@ -98,7 +104,7 @@ export function App() {
     return () => void listener.then((l) => l.remove());
   }, [tab]);
 
-  // Pulling down from the top of a screen syncs with the server.
+  // Pulling down from the top of a screen syncs with the server and checks for an app update.
   const pullFrom = useRef<number | null>(null);
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -129,6 +135,7 @@ export function App() {
     if (pull >= PULL_ENOUGH) {
       setRefreshing(true);
       setPullResult(null);
+      void checkForUpdate(true); // a pull looks for a new app version too; a banner shows if there is one
       void sync().finally(() => {
         setRefreshing(false);
         const ok = getSnapshot().syncStatus === 'idle';

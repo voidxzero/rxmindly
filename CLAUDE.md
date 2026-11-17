@@ -18,7 +18,7 @@ Self-hosted prescription tracker and medicine reminder. Three parts: a server in
   - `src/lib/widget.ts` hands the Android home screen widget its data
   - `src/lib/sounds.ts` the little sounds (Web Audio, no files), switched off in Settings
   - `src/lib/haptics.ts` the vibrations that go with them (Android `HapticsPlugin`: haptic primitives where the phone has them, a waveform otherwise; `navigator.vibrate` in a browser), switched off in Settings
-  - `src/lib/updates.ts` Android self-update from GitHub releases (checks when the app comes into view; no timer)
+  - `src/lib/updates.ts` Android self-update from GitHub releases (checks when the app opens, comes into view, syncs by itself or is pulled down, at most every 5 minutes unless asked; no timer of its own)
   - `android/app/src/main/java/app/rxmindly/` hand-written native code: `NextDoseWidget` (the widget), `WidgetBridgePlugin` (how the web side reaches it) and `UpdaterPlugin` (downloads and installs an update) and `HapticsPlugin` (plays the vibrations) and `FileSaverPlugin` (Android's "save to" screen for exports; a download link does nothing in the app's web view, so always save through `saveFile()` in `src/lib/save-file.ts`)
   - `src/screens/` Organizer, Cabinet, Journal, History, Settings, Login
   - `android/` Capacitor project. `android/app/src/main/assets/public` is generated; never edit it.

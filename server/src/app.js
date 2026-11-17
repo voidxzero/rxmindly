@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { openDb, transaction } from './db.js';
 import {
@@ -14,7 +14,18 @@ import {
 } from './auth.js';
 import { applyOps, exportAll, getState } from './store.js';
 
-const VERSION = '1.0.0';
+// The app's version (web/package.json), so the app can tell whether it and the server match.
+// In the Docker image it is copied next to the code; when run from the source tree it is in web/.
+const VERSION = (() => {
+  for (const path of ['../app-version.json', '../../web/package.json']) {
+    try {
+      return JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8')).version;
+    } catch {
+      /* try the next place */
+    }
+  }
+  return 'unknown';
+})();
 const MAX_BODY = 1024 * 1024;
 
 const MIME = {

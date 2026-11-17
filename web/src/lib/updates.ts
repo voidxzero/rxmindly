@@ -3,7 +3,8 @@
 //
 // A release is a git tag like "v1.2.0" with the built APK attached (see
 // .github/workflows/release.yml). The app asks GitHub for the latest release
-// when it opens or comes back into view, and offers it if it is newer.
+// when it opens, comes back into view, syncs by itself or is pulled down, and
+// offers it if it is newer (at most once every 5 minutes unless asked).
 
 import { useSyncExternalStore } from 'react';
 import { App } from '@capacitor/app';
@@ -116,7 +117,7 @@ export async function installUpdate() {
   }
 }
 
-/** Checks when the app opens and each time it comes back into view. There is no background timer. */
+/** Checks when the app opens and each time it comes back into view (App.tsx also asks along with each automatic sync). */
 export function initUpdates() {
   if (!Capacitor.isNativePlatform()) return;
   void App.getInfo().then((info) => set({ current: info.version }));

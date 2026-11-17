@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Check, Download, KeyRound, LogOut, Pencil, Plus, RefreshCw, Trash2, Upload, Wifi, X } from 'lucide-react';
+import { Bell, Check, CircleCheck, Download, KeyRound, LogOut, Pencil, Plus, RefreshCw, Trash2, TriangleAlert, Upload, Wifi, X } from 'lucide-react';
 import { QuestionInput } from '../components/JournalInput';
 import { Field, Sheet } from '../components/ui';
 import { ApiError, api } from '../lib/api';
@@ -9,10 +9,10 @@ import { dosesCsv, importKindLabel, journalCsv, medicinesCsv, planImport, refill
 import { haptics } from '../lib/haptics';
 import { saveFile } from '../lib/save-file';
 import { EMPTY_STATE, type AppState } from '../lib/types';
-import { checkForUpdate, installUpdate, updateAvailable, useUpdates } from '../lib/updates';
+import { checkForUpdate, installUpdate, isNewer, updateAvailable, useUpdates } from '../lib/updates';
 import { uid } from '../lib/logic';
 import { isNative, reminderPermission, requestReminderPermission, sendTestReminder, type ReminderPermission } from '../lib/reminders';
-import { activeUrl, changeServerUrl, checkAddress, dispatch, serverHasFeature, setBackupUrl, signOut, sync, updateSettings, useStore, withServer, type AddressCheck } from '../lib/store';
+import { activeUrl, changeServerUrl, checkAddress, dispatch, serverHasFeature, serverVersion, setBackupUrl, signOut, sync, updateSettings, useStore, withServer, type AddressCheck } from '../lib/store';
 
 export function syncSummary(snap: ReturnType<typeof useStore>): { text: string; tone: 'ok' | 'warn' | 'bad' | 'info' } {
   const waiting = snap.outbox.length;
@@ -434,6 +434,16 @@ function AppUpdates() {
   const updates = useUpdates();
   const available = updateAvailable(updates);
   const busy = updates.status !== 'idle';
+  // The server is updated by hand, so it can be on another version than the app.
+  const [server, setServer] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    void serverVersion().then((v) => live && setServer(v));
+    return () => {
+      live = false;
+    };
+  }, [updates.checkedAt]);
+  const match = server && updates.current ? (server === updates.current ? 'same' : isNewer(server, updates.current) ? 'app-older' : 'server-older') : null;
   return (
     <section className="card">
       <h2 className="card-title">App updates</h2>
@@ -441,6 +451,22 @@ function AppUpdates() {
         {updates.current ? `You have version ${updates.current}.` : 'Checking which version you have…'}{' '}
         {available ? `Version ${updates.latest} is available.` : updates.latest && !updates.error ? 'That’s the latest.' : ''}
       </p>
+      {match === 'same' && (
+        <p className="note ok">
+          <CircleCheck size={18} /> App and server match (version {server}).
+        </p>
+      )}
+      {match === 'app-older' && (
+        <p className="note warn">
+          <TriangleAlert size={18} /> Mismatch: the server is on version {server}, newer than this app ({updates.current}). Update the app.
+        </p>
+      )}
+      {match === 'server-older' && (
+        <p className="note warn">
+          <TriangleAlert size={18} /> Mismatch: this app is {updates.current}, but the server is still on {server}. Update the server to get everything working.
+        </p>
+      )}
+      {server === null && updates.current && <p className="muted card-sub">Can’t reach the server to compare versions.</p>}
       {updates.error && <p className="note warn">{updates.error}</p>}
       {updates.askedPermission && <p className="note ok">Allow Rxmindly to install updates on the screen that just opened, come back, and tap the button again.</p>}
       {available && (

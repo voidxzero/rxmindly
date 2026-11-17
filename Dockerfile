@@ -18,6 +18,8 @@ WORKDIR /app
 COPY server/package.json ./
 COPY server/src ./src
 COPY --from=web /build/dist ./web
+# The app's version, which the server reports so the app can tell they match.
+COPY --from=web /build/package.json ./app-version.json
 # The app runs as "node", not root: make sure it can read the code however the
 # files' permissions arrived on the machine doing the build.
 RUN chmod -R a+rX /app && mkdir /data && chown node:node /data
